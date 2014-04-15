@@ -1,4 +1,5 @@
 open Syntax
+module M = MatlabAst
 
 let output = ref ""
 
@@ -34,13 +35,13 @@ let parseOrDie =
 \t}\n\n"
 
 let defaultInitial () =
-"\t@Override public " ^ !stringDomain ^ " newInitialFlow() {
+("\t@Override public " ^ !stringDomain ^ " newInitialFlow() {
 \t\treturn " ^ 
   (match !typeDomain with
   | Some (Set _) -> "Sets.newHashSet()"
   | _ -> ""
   ) ^ ";
-\t}\n\n"
+\t}\n\n")
 
 let copy () =
 "\t@Override public " ^ !stringDomain ^ " copy(" ^ !stringDomain ^ " src) {
@@ -67,6 +68,75 @@ let main () =
 (* \t\tprintWithAnalysisResults(ast, analysis); *)
 (* Generation *)
 
+let rec printlvl = function
+  | 0 -> ""
+  | n -> "\t" ^ (printlvl (n-1))
+
+let rec printtp = function 
+  | M.Stmt -> "Stmt"
+  | M.ExprStmt -> "ExprStmt"
+  | M.AssignStmt -> "AssignStmt"
+  | M.GlobalStmt -> "GlobalStmt"
+  | M.PersistentStmt -> "PersistentStmt"
+  | M.ShellCommandStmt -> "ShellCommandStmt"
+  | M.BreakStmt -> "BreakStmt"
+  | M.ContinueStmt -> "ContinueStmt"
+  | M.ReturnStmt -> "ReturnStmt"
+  | M.ForStmt -> "ForStmt"
+  | M.WhileStmt -> "WhileStmt"
+  | M.TryStmt -> "TryStmt"
+  | M.SwitchStmt -> "SwitchStmt"
+  | M.SwitchCaseBlock -> "SwitchCaseBlock"
+  | M.IfStmt -> "IfStmt"
+  | M.IfBlock -> "IfBlock"
+  | M.ElseBlock -> "ElseBlock"
+  | M.Expr -> "Expr"
+  | M.RangeExpr -> "RangeExpr"
+  | M.ColonExpr -> "ColonExpr"
+  | M.EndExpr -> "EndExpr"
+  | M.LValueExpr -> "LValueExpr"
+  | M.NameExpr -> "NameExpr"
+  | M.ParametrizedExpr -> "ParametrizedExpr"
+  | M.CellIndexExpr -> "CellIndexExpr"
+  | M.DotExpr -> "DotExpr"
+  | M.MatrixExpr -> "MatrixExpr"
+  | M.CellArrayExpr -> "CellArrayExpr"
+  | M.SuperClassMethodExpr -> "SuperClassMethodExpr"
+  | M.Row -> "Row"
+  | M.LiteralExpr -> "LiteralExpr"
+  | M.IntLiteralExpr -> "IntLiteralExpr"
+  | M.FPLiteralExpr -> "FPLiteralExpr"
+  | M.StringLiteralExpr -> "StringLiteralExpr"
+  | M.UnaryExpr -> "UnaryExpr"
+  | M.UMinusExpr -> "UMinusExpr"
+  | M.UPlusExpr -> "UPlusExpr"
+  | M.NotExpr -> "NotExpr"
+  | M.MTransposeExpr -> "MTransposeExpr"
+  | M.ArrayTransposeExpr -> "ArrayTransposeExpr"
+  | M.BinaryExpr -> "BinaryExpr"
+  | M.PlusExpr -> "PlusExpr"
+  | M.MinusExpr -> "MinusExpr"
+  | M.MTimesExpr -> "MTimesExpr"
+  | M.MDivExpr -> "MDivExpr"
+  | M.MLDivExpr -> "MLDivExpr"
+  | M.MPowExpr -> "MPowExpr"
+  | M.ETimesExpr -> "ETimesExpr"
+  | M.EDivExpr -> "EDivExpr"
+  | M.ELDivExpr -> "ELDivExpr"
+  | M.EPowExpr -> "EPowExpr"
+  | M.AndExpr -> "AndExpr"
+  | M.OrExpr -> "OrExpr"
+  | M.ShortCircuitAndExpr -> "ShortCircuitAndExpr"
+  | M.ShortCircuitOrExpr -> "ShortCircuitOrExpr"
+  | M.LTExpr -> "LTExpr"
+  | M.GTExpr -> "GTExpr"
+  | M.LEExpr -> "LEExpr"
+  | M.GEExpr -> "GEExpr"
+  | M.EQExpr -> "EQExpr"
+  | M.NEExpr -> "NEExpr"
+  | M.FunctionHandleExpr -> "FunctionHandleExpr"
+  | M.LambdaExpr -> "LambdaExpr"
+
 let genId = function
   | Id id -> id
 
@@ -74,17 +144,20 @@ let genId = function
    | Var id ->
      genId id
    | Plus (o1, o2) -> 
-     let s1 = genSetOp o1 in
-     let s2 = genSetOp o2 in
+     let s1 = genSetExpr o1 in
+     let s2 = genSetExpr o2 in
      "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
    | Minus (o1, o2) -> 
-     let s1 = genSetOp o1 in
-     let s2 = genSetOp o2 in
+     let s1 = genSetExpr o1 in
+     let s2 = genSetExpr o2 in
      "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
    | Times (o1, o2) -> 
-     let s1 = genSetOp o1 in
-     let s2 = genSetOp o2 in
+     let s1 = genSetExpr o1 in
+     let s2 = genSetExpr o2 in
      "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
+
+ and genSetExpr = function
+   | Op o -> genSetOp o
 
 let genFlowExpr e = match !typeDomain, e with
   | Some (Set _), Op o ->
@@ -94,14 +167,14 @@ let rec expandInOut = function
   | EmptySet -> EmptySet
   | Op o -> 
     let rec expandInOutOp = function
-      | Plus  (x, y) -> Plus  (expandInOutOp x, expandInOutOp y)
-      | Minus (x, y) -> Minus (expandInOutOp x, expandInOutOp y)
-      | Times (x, y) -> Times (expandInOutOp x, expandInOutOp y)
+      | Plus  (x, y) -> Plus  (expandInOut x, expandInOut y)
+      | Minus (x, y) -> Minus (expandInOut x, expandInOut y)
+      | Times (x, y) -> Times (expandInOut x, expandInOut y)
       | Var (Id i) -> 
-        if i == "in" then 
+        if i = "in" then 
           Var (Id "currentInSet") 
         else 
-          if i == "out" then
+          if i = "out" then
             Var (Id "currentOutSet")
           else
             Var (Id i)
@@ -114,15 +187,15 @@ let genFlowStmt = function
   | Assign (i, e) -> 
     let e1 = expandInOut e in
     (match !direction with
-    | Some Forward -> 
-      if genId i == "out" then
+    | Some Forward ->
+      if genId i = "out" then
         ("inFlowSets.put(node, copy(currentInSet));",
          "currentOutSet = " ^ (genFlowExpr e1),
          "outFlowSets.put(node, copy(currentOutSet));")
       else
         assert false
     | Some Backward -> 
-      If genId i == "in" then
+      if (genId i) = "in" then
         ("inFlowSets.put(node, copy(currentInSet));",
          "currentInSet = " ^ (genFlowExpr e1),
          "outFlowSets.put(node, copy(currentOutSet));")
@@ -131,29 +204,65 @@ let genFlowStmt = function
     )
   | _ -> assert false (* NOTE : Do we actually want more complicated statements here ? *)
 
-let genBranch = function
-  | 
+let rec methodStmt lvl access (e : mpat) tp = match e with
+  | Var i -> 
+    output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
+               ^ (genId i) ^ " = " ^ access ^ ";\n")
+  | Node m -> methodBody lvl access m
+  | NodeAs (i, m) -> 
+    let _ = 
+      output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
+                 ^ (genId i) ^ " = " ^ access ^ ";\n")
+    in
+    methodBody lvl (genId i) m
 
-let genBranches = function
-  | [] -> ()
-  | b :: bs -> 
-    let _ = genBranch b in
-    genBranches bs
+and methodBody lvl access e = match e with
+  | Stmt -> ()
+  | ExprStmt p -> methodStmt lvl (access ^ ".getExpr()") p M.Expr
+  | AssignStmt (n1, n2) -> 
+    let _ = methodStmt lvl (access ^ ".getLHS()") n1 M.Expr in
+    methodStmt lvl (access ^ ".getRHS()") n2 M.Expr
+  | GlobalStmt i -> () (* TODO: Make sure it is actually globalstmt the type... probably not *)
+  | PersistentStmt i -> () (* TODO *)
+  | BreakStmt -> ()
+  | ContinueStmt -> ()
+  | ReturnStmt -> ()
+
+  | NameExpr i -> output := (!output ^ (printlvl lvl) ^ (printtp M.NameExpr) ^ " " 
+               ^ (genId i) ^ " = " ^ access ^ ";\n")    
+
+let genCond = function
+  | True -> "true"
+  | False -> "false"
+  | Eq (e1, e2) -> "" (* Find eq comparison for sets and etc. *)
+
+let rec genStmt lvl = function
+  | If (c, sl) -> 
+    let _ = output := (!output ^ (printlvl lvl) ^ "if (" ^ (genCond c) ^ ") {\n") in
+    let _ = genStmt (lvl + 1) in
+    output := (!output ^ (printlvl lvl) ^ "}\n")
+  | Assign (i, e) -> 
+    output := (!output ^ (printlvl lvl) ^ (genId i) ^ " = " ^ (genFlowExpr e) ^ ";\n")
+    
 
 let genFlow = function
   | Flow (i, s, bs) ->
-    let _ = nodeString := (genId i) in
-    let (init, cp, ending) = genFlowStmt s in
-    
-    
-    genBranches bs
-
-(*
-let genFlow (Flow (i, s, ns)) = 
-  let nodeName = genId i in
-  (* need to go through s to be able to initialize all vars *)
-  let binit = ref (match 
-*)
+    let nodeName = (genId i) in
+    let (init, cp, ending) as initend = genFlowStmt s in
+    let genBranch = function
+      | (AssignStmt (m1, m2), sl) ->
+        let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
+                           ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
+        let _ = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
+        let _ = methodStmt 2 (nodeName ^ ".getRHS()") m2 M.Expr in
+        let _ = List.iter (genStmt 2) sl in
+        let _ = output := (!output ^ "\t\t" ^ cp ^ "\n") in
+        let _ = output := (!output ^ "\t\t" ^ ending ^ "\n") in
+        let _ = output := (!output ^ "\t}\n\n") in
+        ()
+    in
+    List.iter genBranch bs
+                           
 
 let genDirection d = 
   let _ = direction := (Some d) in
@@ -165,6 +274,7 @@ let rec genDomain : domain -> string = function
   | Set d -> "Set<" ^ (genDomain d) ^ ">"
   | Tuple (d1, d2) -> "Map<" ^ (genDomain d1) ^ ", " ^ (genDomain d2) ^ ">"
   | Name id -> genId id
+  | Matlab m -> printtp m
 
 let genMerge (Merge (i1, i2, Op e)) =
   let _ = output := (!output ^ "\t@Override public " ^ !stringDomain ^ " merge(" 
@@ -173,12 +283,13 @@ let genMerge (Merge (i1, i2, Op e)) =
   match !typeDomain with
   | Some (Set _) -> 
     let s = genSetOp e in
-    let _ = output := (!output ^ "\treturn Sets.newHashSet(" ^ s ^ ");\n") in
-    output := (!output ^ "\t}\n")
+    let _ = output := (!output ^ "\t\treturn Sets.newHashSet(" ^ s ^ ");\n") in
+    output := (!output ^ "\t}\n\n")
 
 let genBodies = function
   | Body (i, m, f, a) -> 
-    let _ = genMerge m in ()
+    let _ = genMerge m in
+    let _ = genFlow f in ()
 
 (* Each analysis is in its own file which has the name of the analysis *)
 let genAnalysis = function

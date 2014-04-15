@@ -21,9 +21,5 @@ let run filename action ast =
       Printf.eprintf "%s%!" msg
   | Parser.Error ->
 let pos = Lexing.lexeme_start_p (lineBuffer) in
-    Printf.eprintf "At line %d and column %d: syntax error === %s. State is %s.\n%!"
-      pos.pos_lnum (pos.pos_cnum - pos.pos_bol) (Lexing.lexeme (lineBuffer)) (
-      match !state with
-      | Lexer.BaseLevel -> "BaseLevel"
-      | Lexer.CommentLevel n -> "CommentLevel " ^ (string_of_int n) 
-     )
+    Printf.eprintf "At line %d and column %d: syntax error === %s.\n%!"
+      pos.pos_lnum (pos.pos_cnum - pos.pos_bol) (Lexing.lexeme (lineBuffer))

@@ -23,6 +23,12 @@ rule lex state = parse
 | "Backward" {BACKWARD}
 | "of" {OF}
 | "{}" {EMPTYSET}
+| "==" {EEQ}
+| "+=" {PEQ}
+| "-=" {MEQ}
+| "*=" {TEQ}
+| "<=" {LEQ}
+| ">=" {GEQ}
 | '=' {EQ}
 | '(' {LBRACKET}
 | ')' {RBRACKET}
@@ -33,6 +39,7 @@ rule lex state = parse
 | "merge" {MERGE}
 | "flow" {FLOW}
 | "at" {AT}
+| "as" {AS}
 | "is" {IS}
 | "where" {WHERE}
 | "if" {IF}
@@ -49,6 +56,13 @@ rule lex state = parse
 | "Set" {SET}
 | ',' {COMMA}
 | eof {EOF}
+
+| "Stmt" {STMT}
+| "AssignStmt" {ASSIGNSTMT}
+| "ExprStmt" {EXPRSTMT}
+
+| "NameExpr" {NAMEEXPR}
+
 | "/*" {state := (CommentLevel 0); comment state lexbuf } (*Comments are just ignored *)
 | "//"[^ '\n']*"\n" {Lexing.new_line lexbuf; lex state lexbuf}
 | id as s       {ID (s)}

@@ -1,3 +1,74 @@
+module MatlabAst =
+  struct
+
+    (* Used for types *)
+    type matlabast = 
+    | Stmt
+    | ExprStmt
+    | AssignStmt
+    | GlobalStmt
+    | PersistentStmt
+    | ShellCommandStmt
+    | BreakStmt
+    | ContinueStmt
+    | ReturnStmt
+    | ForStmt
+    | WhileStmt
+    | TryStmt
+    | SwitchStmt
+    | SwitchCaseBlock
+    | IfStmt
+    | IfBlock
+    | ElseBlock
+    | Expr
+    | RangeExpr
+    | ColonExpr
+    | EndExpr
+    | LValueExpr
+    | NameExpr
+    | ParametrizedExpr
+    | CellIndexExpr
+    | DotExpr
+    | MatrixExpr
+    | CellArrayExpr
+    | SuperClassMethodExpr
+    | Row
+    | LiteralExpr
+    | IntLiteralExpr
+    | FPLiteralExpr
+    | StringLiteralExpr
+    | UnaryExpr
+    | UMinusExpr
+    | UPlusExpr
+    | NotExpr
+    | MTransposeExpr
+    | ArrayTransposeExpr
+    | BinaryExpr
+    | PlusExpr
+    | MinusExpr
+    | MTimesExpr
+    | MDivExpr
+    | MLDivExpr
+    | MPowExpr
+    | ETimesExpr
+    | EDivExpr
+    | ELDivExpr
+    | EPowExpr
+    | AndExpr
+    | OrExpr
+    | ShortCircuitAndExpr
+    | ShortCircuitOrExpr
+    | LTExpr
+    | GTExpr
+    | LEExpr
+    | GEExpr
+    | EQExpr
+    | NEExpr
+    | FunctionHandleExpr
+    | LambdaExpr
+
+  end
+
 type id = 
 | Id of string
 
@@ -5,93 +76,94 @@ type ids = id list
 
 (* Representation of matlab ast as we do splitting on it *)
 
-type matlabvar = (* NOTE: make so matlabnode uses matlabvar instead of list *)
-| MVar of id
+type mpat = 
+| Var of id
+| Node of mnode
+| NodeAs of (id * mnode)
 
-type matlabnode =
-| MMVar of matlabvar (* This case is used because splitting can bind variables on subnodes *)
-
+and mnode =
 | Stmt (* abstract *)
-| ExprStmt of matlabnode
-| AssignStmt of matlabnode * matlabnode
-| GlobalStmt of matlabvar
-| PersistentStmt of matlabvar
+| ExprStmt of mpat
+| AssignStmt of mpat * mpat
+| GlobalStmt of id
+| PersistentStmt of id
 | ShellCommandStmt of id
 
 | BreakStmt
 | ContinueStmt
 | ReturnStmt
 
-| ForStmt of matlabnode * matlabvar
-| WhileStt of matlabnode * matlabvar
+| ForStmt of mpat * id
+| WhileStmt of mpat * id
 
-| TryStmt of matlabvar * matlabvar
+| TryStmt of id * id
 
-| SwitchStmt of matlabnode * matlabnode * matlabnode option
-| SwitchCaseBlock of matlabnode * matlabnode
-| DefaultCaseBlock of matlabnode list
-| IfStmt of matlabnode list * matlabnode option
-| IfBlock of matlabnode * matlabnode
-| ElseBlock of matlabnode
+| SwitchStmt of mpat * mpat * mpat option
+| SwitchCaseBlock of mpat * mpat
+| DefaultCaseBlock of id
+| IfStmt of mpat list * mpat option
+| IfBlock of mpat * mpat
+| ElseBlock of mpat
 
 | Expr (* abstract *)
-| RangeExpr of matlabnode * matlabnode option * matlabnode
+| RangeExpr of mpat * mpat option * mpat
 | ColonExpr
 | EndExpr
 
 | LValueExpr
 | NameExpr of id
-| ParametrizedExpr of matlabnode * matlabnode list
-| CellIndexExpr of matlabnode * matlabnode list
-| DotExpr of matlabnode * id
-| MatrixExpr of matlabnode list
+| ParametrizedExpr of mpat * mpat list
+| CellIndexExpr of mpat * mpat list
+| DotExpr of mpat * id
+| MatrixExpr of mpat list
 
-| CellArrayExpr of matlabnode list
+| CellArrayExpr of mpat list
 | SuperClassMethodExpr of id * id
 
-| Row of matlabnode list
+| Row of mpat list
 
 | LiteralExpr (* abstract *)
 | IntLiteralExpr (* IntNumericLiteralValue ... *)
 | FPLiteralExpr (* FPNumericLiteralValue ... *)
 | StringLiteralExpr of string
 
-| UnaryExpr of matlabnode (* abstract *)
-| UMinusExpr of matlabnode
-| UPlusExpr of matlabnode
-| NotExpr of matlabnode
-| MTransposeExpr of matlabnode
-| ArrayTransposeExpr of matlabnode
+| UnaryExpr of mpat (* abstract *)
+| UMinusExpr of mpat
+| UPlusExpr of mpat
+| NotExpr of mpat
+| MTransposeExpr of mpat
+| ArrayTransposeExpr of mpat
 
-| BinaryExpr of matlabnode * matlabnode
-| PlusExpr of matlabnode * matlabnode
-| MinusExpr of matlabnode * matlabnode
+| BinaryExpr of mpat * mpat
+| PlusExpr of mpat * mpat
+| MinusExpr of mpat * mpat
 
-| MTimesExpr of matlabnode * matlabnode
-| MDivExpr of matlabnode * matlabnode
-| MLDiveExpr of matlabnode * matlabnode
-| MPowExpr of matlabnode * matlabnode
+| MTimesExpr of mpat * mpat
+| MDivExpr of mpat * mpat
+| MLDiveExpr of mpat * mpat
+| MPowExpr of mpat * mpat
 
-| ETimesExpr of matlabnode * matlabnode
-| EDivExpr of matlabnode * matlabnode
-| ELDivExpr of matlabnode * matlabnode
-| EPowExpr of matlabnode * matlabnode
+| ETimesExpr of mpat * mpat
+| EDivExpr of mpat * mpat
+| ELDivExpr of mpat * mpat
+| EPowExpr of mpat * mpat
 
-| AndExpr of matlabnode * matlabnode
-| OrExpr of matlabnode * matlabnode
+| AndExpr of mpat * mpat
+| OrExpr of mpat * mpat
 
-| ShortCircuitAndExpr of matlabnode * matlabnode
-| ShortCircuitOrExpr of matlabnode * matlabnode
+| ShortCircuitAndExpr of mpat * mpat
+| ShortCircuitOrExpr of mpat * mpat
 
-| LTExpr of matlabnode * matlabnode
-| GTExpr of matlabnode * matlabnode
-| LEExpr of matlabnode * matlabnode
-| GEExpr of matlabnode * matlabnode
-| EQExpr of matlabnode * matlabnode
-| NEExpr of matlabnode * matlabnode
+| LTExpr of mpat * mpat
+| GTExpr of mpat * mpat
+| LEExpr of mpat * mpat
+| GEExpr of mpat * mpat
+| EQExpr of mpat * mpat
+| NEExpr of mpat * mpat
 
 | FunctionHandleExpr of id
-| LambdaExpr of id list * matlabnode
+| LambdaExpr of id list * mpat
+
 
 (* DSL specific syntax *)
 
@@ -102,15 +174,16 @@ type direction =
 type domain =
 | Set of domain
 | Tuple of domain * domain
+| Matlab of MatlabAst.matlabast
 | Name of id
 
 type op = 
-| Plus of op * op
-| Minus of op * op
-| Times of op * op
+| Plus of expr * expr
+| Minus of expr * expr
+| Times of expr * expr
 | Var of id
 
-type expr = 
+and expr = 
 | EmptySet
 | Set of expr
 | Tuple of expr * expr
@@ -127,7 +200,7 @@ type cond =
 
 type stmt =
 | If of cond * stmt list
-| For of id * domain * stmt list
+| For of mpat * domain * stmt list
 | Assign of id * expr
 
 type init = 
@@ -138,7 +211,7 @@ type merge =
 
 type flow =
 | NoFlow
-| Flow of id * stmt * (matlabnode * stmt list) list
+| Flow of id * stmt * (mnode * stmt list) list
 
 type aux =
 | NoAux
