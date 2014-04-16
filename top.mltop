@@ -1,3 +1,5 @@
 top
+syntax
+codegen
 parser
 lexer

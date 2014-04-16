@@ -17,6 +17,7 @@ module MatlabAst =
     | TryStmt
     | SwitchStmt
     | SwitchCaseBlock
+    | DefaultCaseBlock
     | IfStmt
     | IfBlock
     | ElseBlock
@@ -140,7 +141,7 @@ and mnode =
 
 | MTimesExpr of mpat * mpat
 | MDivExpr of mpat * mpat
-| MLDiveExpr of mpat * mpat
+| MLDivExpr of mpat * mpat
 | MPowExpr of mpat * mpat
 
 | ETimesExpr of mpat * mpat
@@ -200,7 +201,7 @@ type cond =
 
 type stmt =
 | If of cond * stmt list
-| For of mpat * domain * stmt list
+| For of mpat * id * stmt list
 | Assign of id * expr
 
 type init = 
