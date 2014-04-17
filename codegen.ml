@@ -245,8 +245,8 @@ let rec genDomain : domain -> string = function
 *)
 
  and genFlowExpr (t : domain) e = match t, e with
-   | _, Op (Var id) -> genId id
-   | Set _, Op o ->
+   | _, Var id -> genId id
+   | Set _, o ->
      "Sets.newHashSet(" ^ (genSetOp t o) ^ ")"
    | Set a, Set o ->
      "Sets.newHashSet(" ^ (genFlowExpr a o) ^ ")"

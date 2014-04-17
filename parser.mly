@@ -24,7 +24,7 @@ exception MisformedBodies
 %token STMT EXPRSTMT ASSIGNSTMT GLOBALSTMT PERSISTENTSTMT SHELLCOMMANDSTMT 
 %token BREAKSTMT CONTINUESTMT RETURNSTMT
 %token FORSTMT WHILESTMT TRYSTMT SWITCHSTMT SWITCHCASEBLOCK IFSTMT IFBLOCK ELSEBLOCK
-%token EXPR RANGEEXPR COLONEXPR ENDEXPR LVALUEEXPR NAMEEXPR PARAMETRIZEDEXPR 
+%token EXPR RANGEEXPR COLONEXPR ENDEXPR LVALUEEXPR NAMEEXPR PARAMETERIZEDEXPR 
 %token CELLINDEXEXPR DOTEXPR MATRIXEXPR CELLARRAYEXPR SUPERCLASSMETHODEXPR ROW
 %token LITERALEXPR INTLITERALEXPR FPLITERALEXPR STRINGLITERALEXPR
 
@@ -58,7 +58,7 @@ matlabast:
 | ENDEXPR {M.EndExpr}
 | LVALUEEXPR {M.LValueExpr}
 | NAMEEXPR {M.NameExpr}
-| PARAMETRIZEDEXPR {M.ParametrizedExpr}
+| PARAMETERIZEDEXPR {M.ParameterizedExpr}
 | CELLINDEXEXPR {M.CellIndexExpr}
 | DOTEXPR {M.DotExpr}
 | MATRIXEXPR {M.MatrixExpr}
@@ -123,8 +123,7 @@ mtnode:
 | BREAKSTMT {BreakStmt}
 | CONTINUESTMT {ContinueStmt}
 | RETURNSTMT {ReturnStmt}
-
-| NAMEEXPR i = id {NameExpr i}
+| NAMEEXPR v = varnode {NameExpr v}
 
 direction:
 | FORWARD {Forward}
@@ -136,42 +135,46 @@ domain:
 | m = matlabast {Matlab m}
 | i = id {Name i}
 
+ntexpr:
+| e = expr {NoTyp e}
+
 op:
-| x = expr PLUS y = expr {Plus (x, y)}
-| x = expr MINUS y = expr {Minus (x, y)}
-| x = expr TIMES y = expr {Times (x, y)}
+| x = ntexpr PLUS  y = ntexpr {Plus  (x, y)}
+| x = ntexpr MINUS y = ntexpr {Minus (x, y)}
+| x = ntexpr TIMES y = ntexpr {Times (x, y)}
 | x = id {Var x}
 
 expr:
 | EMPTYSET {EmptySet}
-| o = op {Op o}
-| LCURLY e = expr RCURLY {Set e}
-| LBRACKET e1 = expr COMMA e2 = expr RBRACKET {Tuple (e1, e2)}
+| o = op {o}
+| LCURLY e = ntexpr RCURLY {Set e}
+| LBRACKET e1 = ntexpr COMMA e2 = ntexpr RBRACKET {Tuple (e1, e2)}
 | LBRACKET e = expr RBRACKET {e}
 
 cond:
 | TRUE {True}
 | FALSE {False}
-| e1 = expr EEQ e2 = expr {Eq (e1, e2)}
+| e1 = ntexpr EEQ e2 = ntexpr {Eq (e1, e2)}
 
 stmt:
 | IF LBRACKET c = cond RBRACKET s = stmt {If (c, [s])}
 | IF LBRACKET c = cond RBRACKET LCURLY s = stmt* RCURLY {If (c, s)}
-| FOR LBRACKET m = varnode COLON d = domain RBRACKET s = stmt {For (m, d, [s])}
-| FOR LBRACKET m = varnode COLON d = domain RBRACKET LCURLY s = stmt* RCURLY {For (m, d, s)}
-| i = id EQ e = expr SCOLON {Assign (i, e)}
-| i = id PEQ e = expr SCOLON {Assign (i, Op (Plus (Op (Var i), e)))}
-| i = id TEQ e = expr SCOLON {Assign (i, Op (Times (Op (Var i), e)))}
-| i = id MEQ e = expr SCOLON {Assign (i, Op (Minus (Op (Var i), e)))}
+| FOR LBRACKET m = varnode COLON i = id RBRACKET s = stmt {For (m, i, [s])}
+| FOR LBRACKET m = varnode COLON i = id RBRACKET LCURLY s = stmt* RCURLY {For (m, i, s)}
+| i = id EQ e = ntexpr SCOLON {Assign (i, e)}
+(* Syntactic sugar *)
+| i = id PEQ e = ntexpr SCOLON {Assign (i, NoTyp (Plus (NoTyp (Var i), e)))}
+| i = id TEQ e = ntexpr SCOLON {Assign (i, NoTyp (Times (NoTyp (Var i), e)))}
+| i = id MEQ e = ntexpr SCOLON {Assign (i, NoTyp (Minus (NoTyp (Var i), e)))}
 
 merge:
-| MERGE n = id; m = id EQ e = expr SCOLON {Merge (n, m, e)} 
+| MERGE n = id; m = id EQ e = ntexpr SCOLON {Merge (n, m, e)} 
 
 node:
 | VERT m = mtnode ARR s = stmt* {(m, s)}
 
 flowstmt:
-| i = id EQ e = expr {Assign (i, e)}
+| i = id EQ e = ntexpr {Assign (i, e)}
 
 flow:
 | FLOW AT i = id IS s = flowstmt WHERE n = node* SCOLON {Flow (i, s, n)}

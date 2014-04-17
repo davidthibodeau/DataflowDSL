@@ -27,7 +27,7 @@ module MatlabAst =
     | EndExpr
     | LValueExpr
     | NameExpr
-    | ParametrizedExpr
+    | ParameterizedExpr
     | CellIndexExpr
     | DotExpr
     | MatrixExpr
@@ -99,12 +99,12 @@ and mnode =
 
 | TryStmt of id * id
 
-| SwitchStmt of mpat * mpat * mpat option
+| SwitchStmt of mpat * mpat * mpat
 | SwitchCaseBlock of mpat * mpat
 | DefaultCaseBlock of id
 | IfStmt of mpat list * mpat option
-| IfBlock of mpat * mpat
-| ElseBlock of mpat
+| IfBlock of mpat * id
+| ElseBlock of id
 
 | Expr (* abstract *)
 | RangeExpr of mpat * mpat option * mpat
@@ -112,8 +112,8 @@ and mnode =
 | EndExpr
 
 | LValueExpr
-| NameExpr of id
-| ParametrizedExpr of mpat * mpat list
+| NameExpr of mpat
+| ParameterizedExpr of mpat * mpat list
 | CellIndexExpr of mpat * mpat list
 | DotExpr of mpat * id
 | MatrixExpr of mpat list
@@ -178,21 +178,18 @@ type domain =
 | Matlab of MatlabAst.matlabast
 | Name of id
 
-type op = 
+type typexpr = 
+| EmptySet
+| Set of expr
+| Tuple of expr * expr
 | Plus of expr * expr
 | Minus of expr * expr
 | Times of expr * expr
 | Var of id
 
-and expr = 
-| EmptySet
-| Set of expr
-| Tuple of expr * expr
-(*
-| Stmt of matlabnode
-| Expr of matlabnode
-*)
-| Op of op
+and expr =
+| NoTyp of typexpr
+| Typ of typexpr * domain
 
 type cond =
 | True
@@ -229,9 +226,7 @@ type bodies =
 type analysis =
 | Analysis of id * direction * domain * bodies
 
-type analyses = analysis list
-
 type program = 
-| Program of analyses
+| Program of analysis list
 | Empty
 (*enums isn't right. Need to think about natural representation of lattice *)

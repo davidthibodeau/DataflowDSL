@@ -13,7 +13,8 @@ let run filename action ast =
     let () = ast := Parser.program lexing lineBuffer in
     match action with
     | "parse" -> ()
-    | "gen" -> Codegen.codegen !ast
+    | "type" -> let _ = Types.typeProgram !ast in ()
+ (*   | "gen" -> Codegen.codegen !ast *)
     | _ ->
       let _ = print_endline "Invalid action" in ()
   with
