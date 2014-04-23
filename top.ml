@@ -14,13 +14,15 @@ let run filename action ast =
     match action with
     | "parse" -> ()
     | "type" -> let _ = Types.typeProgram !ast in ()
- (*   | "gen" -> Codegen.codegen !ast *)
+    | "gen" -> 
+      let _ = ast := Types.typeProgram !ast in
+      Codegen.codegen !ast
     | _ ->
       let _ = print_endline "Invalid action" in ()
   with
   | Lexer.Error msg ->
       Printf.eprintf "%s%!" msg
   | Parser.Error ->
-let pos = Lexing.lexeme_start_p (lineBuffer) in
+    let pos = Lexing.lexeme_start_p (lineBuffer) in
     Printf.eprintf "At line %d and column %d: syntax error === %s.\n%!"
       pos.pos_lnum (pos.pos_cnum - pos.pos_bol) (Lexing.lexeme (lineBuffer))

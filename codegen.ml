@@ -1,5 +1,8 @@
 open Syntax
+module T = Types
 module M = MatlabAst
+
+exception UntypedExpression
 
 let output = ref ""
 
@@ -79,7 +82,8 @@ let rec closeinnerlvl n m =
   else
     ""
 
-let rec printtp = function 
+let rec printtp = function
+  | M.Name -> "Name"
   | M.Stmt -> "Stmt"
   | M.ExprStmt -> "ExprStmt"
   | M.AssignStmt -> "AssignStmt"
@@ -104,7 +108,7 @@ let rec printtp = function
   | M.EndExpr -> "EndExpr"
   | M.LValueExpr -> "LValueExpr"
   | M.NameExpr -> "NameExpr"
-  | M.ParametrizedExpr -> "ParametrizedExpr"
+  | M.ParameterizedExpr -> "ParameterizedExpr"
   | M.CellIndexExpr -> "CellIndexExpr"
   | M.DotExpr -> "DotExpr"
   | M.MatrixExpr -> "MatrixExpr"
@@ -145,75 +149,7 @@ let rec printtp = function
   | M.FunctionHandleExpr -> "FunctionHandleExpr"
   | M.LambdaExpr -> "LambdaExpr"
 
-let rec decidetp = function 
-  | Stmt -> M.Stmt
-  | ExprStmt _ -> M.ExprStmt
-  | AssignStmt _ -> M.AssignStmt
-  | GlobalStmt _ -> M.GlobalStmt 
-  | PersistentStmt _ -> M.PersistentStmt 
-  | ShellCommandStmt _ -> M.ShellCommandStmt
-  | BreakStmt -> M.BreakStmt 
-  | ContinueStmt -> M.ContinueStmt 
-  | ReturnStmt -> M.ReturnStmt 
-  | ForStmt _ -> M.ForStmt 
-  | WhileStmt _ ->  M.WhileStmt
-  | TryStmt _ -> M.TryStmt
-  | SwitchStmt _ -> M.SwitchStmt
-  | SwitchCaseBlock _ -> M.SwitchCaseBlock
-  | DefaultCaseBlock _ -> M.DefaultCaseBlock
-  | IfStmt _ -> M.IfStmt 
-  | IfBlock _ -> M.IfBlock 
-  | ElseBlock _ -> M.ElseBlock
-  | Expr -> M.Expr 
-  | RangeExpr _ -> M.RangeExpr
-  | ColonExpr -> M.ColonExpr
-  | EndExpr -> M.EndExpr
-  | LValueExpr -> M.LValueExpr 
-  | NameExpr _ -> M.NameExpr 
-  | ParametrizedExpr _ -> M.ParametrizedExpr 
-  | CellIndexExpr _ -> M.CellIndexExpr 
-  | DotExpr _ -> M.DotExpr 
-  | MatrixExpr _ -> M.MatrixExpr
-  | CellArrayExpr _ -> M.CellArrayExpr 
-  | SuperClassMethodExpr _ -> M.SuperClassMethodExpr 
-  | Row _ -> M.Row 
-  | LiteralExpr -> M.LiteralExpr
-  | IntLiteralExpr -> M.IntLiteralExpr
-  | FPLiteralExpr -> M.FPLiteralExpr 
-  | StringLiteralExpr _ -> M.StringLiteralExpr
-  | UnaryExpr _ -> M.UnaryExpr 
-  | UMinusExpr _ -> M.UMinusExpr
-  | UPlusExpr _ -> M.UPlusExpr 
-  | NotExpr _ -> M.NotExpr
-  | MTransposeExpr _ -> M.MTransposeExpr
-  | ArrayTransposeExpr _ -> M.ArrayTransposeExpr
-  | BinaryExpr _ -> M.BinaryExpr 
-  | PlusExpr _ -> M.PlusExpr 
-  | MinusExpr _ -> M.MinusExpr
-  | MTimesExpr _ -> M.MTimesExpr
-  | MDivExpr _ -> M.MDivExpr 
-  | MLDivExpr _ -> M.MLDivExpr
-  | MPowExpr _ -> M.MPowExpr 
-  | ETimesExpr _ -> M.ETimesExpr
-  | EDivExpr _ -> M.EDivExpr 
-  | ELDivExpr _ -> M.ELDivExpr
-  | EPowExpr _ -> M.EPowExpr 
-  | AndExpr _ -> M.AndExpr 
-  | OrExpr _ -> M.OrExpr 
-  | ShortCircuitAndExpr _ -> M.ShortCircuitAndExpr
-  | ShortCircuitOrExpr _ -> M.ShortCircuitOrExpr 
-  | LTExpr _ -> M.LTExpr
-  | GTExpr _ -> M.GTExpr
-  | LEExpr _ -> M.LEExpr
-  | GEExpr _ -> M.GEExpr
-  | EQExpr _ -> M.EQExpr
-  | NEExpr _ -> M.NEExpr
-  | FunctionHandleExpr _ -> M.FunctionHandleExpr
-  | LambdaExpr _ -> M.LambdaExpr
 
-
-let genId = function
-  | Id id -> id
 
 let getTypeDomain () = match !typeDomain with
   | Some e -> e
@@ -225,76 +161,50 @@ let rec genDomain : domain -> string = function
   | Name id -> genId id
   | Matlab m -> printtp m
 
- let rec genSetOp t = function
-   | Plus (o1, o2) -> 
-     let s1 = genFlowExpr t o1 in
-     let s2 = genFlowExpr t o2 in
+let rec genTExpr = function
+  | NoTyp e -> raise UntypedExpression
+  | Typ (e, t) -> genFlowExpr e
+
+and genFlowExpr e = match e with
+  | Var id -> genId id
+  | Plus (o1, o2) -> 
+    let s1 = genTExpr o1 in
+    let s2 = genTExpr o2 in
      "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
-   | Minus (o1, o2) -> 
-     let s1 = genFlowExpr t o1 in
-     let s2 = genFlowExpr t o2 in
-     "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
-   | Times (o1, o2) -> 
-     let s1 = genFlowExpr t o1 in
-     let s2 = genFlowExpr t o2 in
+  | Minus (o1, o2) -> 
+    let s1 = genTExpr o1 in
+    let s2 = genTExpr o2 in
+    "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
+  | Times (o1, o2) -> 
+    let s1 = genTExpr o1 in
+    let s2 = genTExpr o2 in
      "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
-
-(*
- and genSetExpr = function
-   | Op o -> genSetOp o
-*)
-
- and genFlowExpr (t : domain) e = match t, e with
-   | _, Var id -> genId id
-   | Set _, o ->
-     "Sets.newHashSet(" ^ (genSetOp t o) ^ ")"
-   | Set a, Set o ->
-     "Sets.newHashSet(" ^ (genFlowExpr a o) ^ ")"
-   | a, _ -> genDomain a
-(*
-
-*)
+  | EmptySet -> "Sets.newHashSet()"
+  | Set e -> 
+    let s = genTExpr e in
+    "Sets.newHashSet(" ^ s ^ ")"
+       
+   
 
 let rec expandInOut = function
   | EmptySet -> EmptySet
-  | Op o -> 
-    let rec expandInOutOp = function
-      | Plus  (x, y) -> Plus  (expandInOut x, expandInOut y)
-      | Minus (x, y) -> Minus (expandInOut x, expandInOut y)
-      | Times (x, y) -> Times (expandInOut x, expandInOut y)
-      | Var (Id i) -> 
-        if i = "in" then 
-          Var (Id "currentInSet") 
-        else 
-          if i = "out" then
-            Var (Id "currentOutSet")
-          else
-            Var (Id i)
-    in
-    Op (expandInOutOp o)
-  | Set e -> Set (expandInOut e)
-  | Tuple (e1, e2) -> Tuple (expandInOut e1, expandInOut e2)
-
-let genFlowStmt = function
-  | Assign (i, e) -> 
-    let e1 = expandInOut e in
-    (match !direction with
-    | Some Forward ->
-      if genId i = "out" then
-        ("inFlowSets.put(node, copy(currentInSet));",
-         "currentOutSet = " ^ (genFlowExpr (getTypeDomain ()) e1),
-         "outFlowSets.put(node, copy(currentOutSet));")
+  | Plus  (x, y) -> Plus  (expandTypInOut x, expandTypInOut y)
+  | Minus (x, y) -> Minus (expandTypInOut x, expandTypInOut y)
+  | Times (x, y) -> Times (expandTypInOut x, expandTypInOut y)
+  | Var (Id i) -> 
+    if i = "in" then 
+      Var (Id "currentInSet") 
+    else 
+      if i = "out" then
+        Var (Id "currentOutSet")
       else
-        assert false
-    | Some Backward -> 
-      if (genId i) = "in" then
-        ("inFlowSets.put(node, copy(currentInSet));",
-         "currentInSet = " ^ (genFlowExpr (getTypeDomain ()) e1),
-         "outFlowSets.put(node, copy(currentOutSet));")
-      else
-        assert false
-    )
-  | _ -> assert false (* NOTE : Do we actually want more complicated statements here ? *)
+        Var (Id i)
+  | Set e -> Set (expandTypInOut e)
+  | Tuple (e1, e2) -> Tuple (expandTypInOut e1, expandTypInOut e2)
+    
+and expandTypInOut = function
+      | NoTyp e -> NoTyp (expandInOut e)
+      | Typ (e, t) -> Typ (expandInOut e, t)
 
 let rec methodStmt lvl access (e : mpat) tp = match e with
   | Var i -> let _ = output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
@@ -302,14 +212,14 @@ let rec methodStmt lvl access (e : mpat) tp = match e with
              lvl
   | Node m -> 
     let _ = output := (!output ^ (printlvl lvl) ^ "if(" ^ access ^ " instanceof " ^
-                          (printtp (decidetp m)) ^ ") {\n") in
+                          (printtp (T.decidetp m)) ^ ") {\n") in
       methodBody (lvl + 1) access m
   | NodeAs (i, m) -> 
     let _ = 
       output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
                  ^ (genId i) ^ " = " ^ access ^ ";\n") in
     let _ = output := (!output ^ (printlvl lvl) ^ "if(" ^ access ^ " instanceof " ^
-                          (printtp (decidetp m)) ^ ") {\n") in
+                          (printtp (T.decidetp m)) ^ ") {\n") in
     methodBody lvl (genId i) m
 
 and methodBody lvl access e = match e with
@@ -324,10 +234,8 @@ and methodBody lvl access e = match e with
   | ContinueStmt -> lvl
   | ReturnStmt -> lvl
 
-  | NameExpr i -> 
-    let _ = output := (!output ^ (printlvl lvl) ^ (printtp M.NameExpr) ^ " " 
-               ^ (genId i) ^ " = " ^ access ^ ";\n") in
-    lvl
+  | NameExpr i -> methodStmt lvl (access ^ ".getName()") i M.Name
+
 
 let genCond = function
   | True -> "true"
@@ -345,33 +253,63 @@ let rec genStmt lvl = function
     output := (!output ^ (closeinnerlvl lvl lvl))
   | Assign (i, e) -> 
     output := (!output ^ (printlvl lvl) ^ (genId i) ^ " = " 
-               ^ (genFlowExpr (getTypeDomain ()) e) ^ ";\n")
+               ^ (genTExpr e) ^ ";\n")
 
+let rec genFExpr = function
+  | Var id -> genId id
+  | Plus (o1, o2) -> 
+    let s1 = genFExpr o1 in
+    let s2 = genFExpr o2 in
+     "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
+  | Minus (o1, o2) -> 
+    let s1 = genFExpr o1 in
+    let s2 = genFExpr o2 in
+    "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
+  | Times (o1, o2) -> 
+    let s1 = genFExpr o1 in
+    let s2 = genFExpr o2 in
+     "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
+
+let genBranch nodeName initend e =
+  let (init, cp, ending) = initend in
+  let _ = match e with
+    | (AssignStmt (m1, m2), sl) ->
+      let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
+                         ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
+      let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
+      let lvl2 = methodStmt lvl1 (nodeName ^ ".getRHS()") m2 M.Expr in
+      let _ = List.iter (genStmt lvl2) sl in
+      output := (!output ^ (closeinnerlvl (lvl2 - 1) 2))
+    | (Stmt, sl) ->
+      let _ = output := (!output ^ "\t@Override public void caseStmt(Stmt " 
+                         ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
+      List.iter (genStmt 2) sl
+  in
+  let _ = output := (!output ^ "\t\t" ^ cp ^ "\n") in
+  let _ = output := (!output ^ "\t\t" ^ ending ^ "\n") in
+  let _ = output := (!output ^ "\t}\n\n") in
+  ()
+    
 let genFlow = function
-  | Flow (i, s, bs) ->
+  | Flow (i, (i', fe), bs) ->
     let nodeName = (genId i) in
-    let (init, cp, ending) as initend = genFlowStmt s in
-    let genBranch e = 
-      let _ = match e with
-        | (AssignStmt (m1, m2), sl) ->
-          let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
-                             ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
-          let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
-          let lvl2 = methodStmt lvl1 (nodeName ^ ".getRHS()") m2 M.Expr in
-          let _ = List.iter (genStmt lvl2) sl in
-          output := (!output ^ (closeinnerlvl (lvl2 - 1) 2))
-        | (Stmt, sl) ->
-          let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
-                             ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
-          List.iter (genStmt 2) sl
-      in
-     
-      let _ = output := (!output ^ "\t\t" ^ cp ^ "\n") in
-      let _ = output := (!output ^ "\t\t" ^ ending ^ "\n") in
-      let _ = output := (!output ^ "\t}\n\n") in
-      ()
+    let initend = match !direction with
+      | Some Forward ->
+        if genId i' = "out" then
+          ("inFlowSets.put(node, copy(currentInSet));",
+           "currentOutSet = " ^ (genFExpr fe),
+           "outFlowSets.put(node, copy(currentOutSet));")
+        else
+          assert false
+      | Some Backward -> 
+        if genId i' = "in" then
+          ("inFlowSets.put(node, copy(currentInSet));",
+           "currentInSet = " ^ (genFExpr fe),
+           "outFlowSets.put(node, copy(currentOutSet));")
+        else
+          assert false
     in
-    List.iter genBranch bs
+    List.iter (genBranch nodeName initend) bs
                            
 
 let genDirection d = 
@@ -381,15 +319,13 @@ let genDirection d =
   | Backward -> "BackwardAnalysis"
 
 
-let genMerge (Merge (i1, i2, Op e)) =
+let genMerge (Merge (i1, i2, e)) =
   let _ = output := (!output ^ "\t@Override public " ^ !stringDomain ^ " merge(" 
                      ^ !stringDomain ^ " " ^ (genId i1) ^ ", " ^ !stringDomain 
                      ^ " " ^ genId i2 ^ ") {\n") in
-  match !typeDomain with
-  | Some (Set _ as a) -> 
-    let s = genSetOp a e in
-    let _ = output := (!output ^ "\t\treturn Sets.newHashSet(" ^ s ^ ");\n") in
-    output := (!output ^ "\t}\n\n")
+  let s = genTExpr e in
+  let _ = output := (!output ^ "\t\treturn Sets.newHashSet(" ^ s ^ ");\n") in
+  output := (!output ^ "\t}\n\n")
 
 let genBodies = function
   | Body (i, m, f, a) -> 
@@ -419,3 +355,4 @@ let genAnalysis = function
 let codegen = function 
   | Program a -> 
     List.iter genAnalysis a
+  | Empty -> ()

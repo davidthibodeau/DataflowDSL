@@ -3,6 +3,7 @@ module MatlabAst =
 
     (* Used for types *)
     type matlabast = 
+    | Name
     | Stmt
     | ExprStmt
     | AssignStmt
@@ -73,6 +74,8 @@ module MatlabAst =
 type id = 
 | Id of string
 
+let genId (Id id) = id
+
 type ids = id list
 
 (* Representation of matlab ast as we do splitting on it *)
@@ -83,6 +86,7 @@ type mpat =
 | NodeAs of (id * mnode)
 
 and mnode =
+| Name of id
 | Stmt (* abstract *)
 | ExprStmt of mpat
 | AssignStmt of mpat * mpat
@@ -201,6 +205,12 @@ type stmt =
 | For of mpat * id * stmt list
 | Assign of id * expr
 
+type fexpr = 
+| Plus of fexpr * fexpr
+| Minus of fexpr * fexpr
+| Times of fexpr * fexpr
+| Var of id
+
 type init = 
 | NoInit
 
@@ -209,7 +219,7 @@ type merge =
 
 type flow =
 | NoFlow
-| Flow of id * stmt * (mnode * stmt list) list
+| Flow of id * (id * fexpr) * (mnode * stmt list) list
 
 type aux =
 | NoAux

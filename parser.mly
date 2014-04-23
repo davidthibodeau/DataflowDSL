@@ -22,19 +22,24 @@ exception MisformedBodies
 
 (* Tokens defined for matlab nodes *)
 %token STMT EXPRSTMT ASSIGNSTMT GLOBALSTMT PERSISTENTSTMT SHELLCOMMANDSTMT 
-%token BREAKSTMT CONTINUESTMT RETURNSTMT
+%token BREAKSTMT CONTINUESTMT RETURNSTMT NAME
 %token FORSTMT WHILESTMT TRYSTMT SWITCHSTMT SWITCHCASEBLOCK IFSTMT IFBLOCK ELSEBLOCK
 %token EXPR RANGEEXPR COLONEXPR ENDEXPR LVALUEEXPR NAMEEXPR PARAMETERIZEDEXPR 
 %token CELLINDEXEXPR DOTEXPR MATRIXEXPR CELLARRAYEXPR SUPERCLASSMETHODEXPR ROW
 %token LITERALEXPR INTLITERALEXPR FPLITERALEXPR STRINGLITERALEXPR
+%token UNARYEXPR UMINUSEXPR UPLUSEXPR NOTEXPR MTRANSPOSEEXPR ARRAYTRANSPOSEEXPR
+%token BINARYEXPR PLUSEXPR MINUSEXPR MTIMESEXPR MDIVEXPR MLDIVEXPR MPOWEXPR
+%token ETIMESEXPR EDIVEXPR ELDIVEXPR EPOWEXPR
+%token ANDEXPR OREXPR SHORTCIRCUITANDEXPR SHORTCIRCUITOREXPR
+%token LTEXPR GTEXPR LEEXPR GEEXPR EQEXPR NEEXPR FUNCTIONHANDLEEXPR LAMBDAEXPR
 
 %left PLUS MINUS
 %left TIMES
 
-
 %%
 
 matlabast:
+| NAME {M.Name}
 | STMT {M.Stmt}
 | EXPRSTMT {M.ExprStmt}
 | ASSIGNSTMT{M.AssignStmt}
@@ -69,37 +74,35 @@ matlabast:
 | INTLITERALEXPR {M.IntLiteralExpr}
 | FPLITERALEXPR {M.FPLiteralExpr}
 | STRINGLITERALEXPR {M.StringLiteralExpr}
-(* TODO Finish that
-| {M.UnaryExpr}
-| {M.UMinusExpr}
-| {M.UPlusExpr}
-| {M.NotExpr}
-| {M.MTransposeExpr}
-| {M.ArrayTransposeExpr}
-| {M.BinaryExpr}
-| {M.PlusExpr}
-| {M.MinusExpr}
-| {M.MTimesExpr}
-| {M.MDivExpr}
-| {M.MLDiveExpr}
-| {M.MPowExpr}
-| {M.ETimesExpr}
-| {M.EDivExpr}
-| {M.ELDivExpr}
-| {M.EPowExpr}
-| {M.AndExpr}
-| {M.OrExpr}
-| {M.ShortCircuitAndExpr}
-| {M.ShortCircuitOrExpr}
-| {M.LTExpr}
-| {M.GTExpr}
-| {M.LEExpr}
-| {M.GEExpr}
-| {M.EQExpr}
-| {M.NEExpr}
-| {M.FunctionHandleExpr}
-| {M.LambdaExpr}
-*)
+| UNARYEXPR {M.UnaryExpr}
+| UMINUSEXPR {M.UMinusExpr}
+| UPLUSEXPR {M.UPlusExpr}
+| NOTEXPR {M.NotExpr}
+| MTRANSPOSEEXPR {M.MTransposeExpr}
+| ARRAYTRANSPOSEEXPR {M.ArrayTransposeExpr}
+| BINARYEXPR {M.BinaryExpr}
+| PLUSEXPR {M.PlusExpr}
+| MINUSEXPR {M.MinusExpr}
+| MTIMESEXPR {M.MTimesExpr}
+| MDIVEXPR {M.MDivExpr}
+| MLDIVEXPR {M.MLDivExpr}
+| MPOWEXPR {M.MPowExpr}
+| ETIMESEXPR {M.ETimesExpr}
+| EDIVEXPR {M.EDivExpr}
+| ELDIVEXPR {M.ELDivExpr}
+| EPOWEXPR {M.EPowExpr}
+| ANDEXPR {M.AndExpr}
+| OREXPR {M.OrExpr}
+| SHORTCIRCUITANDEXPR {M.ShortCircuitAndExpr}
+| SHORTCIRCUITOREXPR {M.ShortCircuitOrExpr}
+| LTEXPR {M.LTExpr}
+| GTEXPR {M.GTExpr}
+| LEEXPR{M.LEExpr}
+| GEEXPR {M.GEExpr}
+| EQEXPR {M.EQExpr}
+| NEEXPR {M.NEExpr}
+| FUNCTIONHANDLEEXPR {M.FunctionHandleExpr}
+| LAMBDAEXPR {M.LambdaExpr}
 
 id:
 | i = ID {Id i}
@@ -137,19 +140,17 @@ domain:
 
 ntexpr:
 | e = expr {NoTyp e}
+| LBRACKET e = expr COLON t = domain RBRACKET {Typ (e, t)}
 
-op:
+expr:
+| EMPTYSET {EmptySet}
+| LCURLY e = ntexpr RCURLY {Set e}
+| LBRACKET e1 = ntexpr COMMA e2 = ntexpr RBRACKET {Tuple (e1, e2)}
+| LBRACKET e = expr RBRACKET {e}
 | x = ntexpr PLUS  y = ntexpr {Plus  (x, y)}
 | x = ntexpr MINUS y = ntexpr {Minus (x, y)}
 | x = ntexpr TIMES y = ntexpr {Times (x, y)}
 | x = id {Var x}
-
-expr:
-| EMPTYSET {EmptySet}
-| o = op {o}
-| LCURLY e = ntexpr RCURLY {Set e}
-| LBRACKET e1 = ntexpr COMMA e2 = ntexpr RBRACKET {Tuple (e1, e2)}
-| LBRACKET e = expr RBRACKET {e}
 
 cond:
 | TRUE {True}
@@ -173,11 +174,15 @@ merge:
 node:
 | VERT m = mtnode ARR s = stmt* {(m, s)}
 
-flowstmt:
-| i = id EQ e = ntexpr {Assign (i, e)}
+fexpr:
+| x = fexpr PLUS  y = fexpr {Plus  (x, y)}
+| x = fexpr MINUS y = fexpr {Minus (x, y)}
+| x = fexpr TIMES y = fexpr {Times (x, y)}
+| LBRACKET e = fexpr RBRACKET {e}
+| x = id {Var x}
 
 flow:
-| FLOW AT i = id IS s = flowstmt WHERE n = node* SCOLON {Flow (i, s, n)}
+| FLOW AT i = id IS i1 = id EQ fe = fexpr WHERE n = node* SCOLON {Flow (i, (i1, fe), n)}
     
 body:
 | m = merge {M m}
