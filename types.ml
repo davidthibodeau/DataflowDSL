@@ -1,5 +1,6 @@
 open Syntax
-module M = MatlabAst
+open Matlab
+module M = Ast
 
 type ctx = (id * domain) list
 
@@ -15,7 +16,7 @@ let errte : (expr * expr) option ref = ref None
 let errta : (stmt * domain * domain) option ref = ref None
 
 let printError = function
-  | RepeatedPatternException i -> "Variable " ^ (genId i) ^ " appears twice in same pattern."
+  | RepeatedPatternException i -> "Variable " ^ i ^ " appears twice in same pattern."
   | MismatchedTypeAssignment (s, d1, d2) -> 
     let _ = errta := Some (s, d1, d2) in
     "Some mismatched type assignment"
@@ -25,75 +26,9 @@ let printError = function
     "Some mismatched type expression"
   | UndefinedVariable (c, i) -> 
     let _ = errctx := c in
-    "Variable " ^ (genId i) ^ " appears freely."
+    "Variable " ^ i ^ " appears freely."
 
 exception Error of error
-
-let rec decidetp = function 
-  | Stmt -> M.Stmt
-  | ExprStmt _ -> M.ExprStmt
-  | AssignStmt _ -> M.AssignStmt
-  | GlobalStmt _ -> M.GlobalStmt 
-  | PersistentStmt _ -> M.PersistentStmt 
-  | ShellCommandStmt _ -> M.ShellCommandStmt
-  | BreakStmt -> M.BreakStmt 
-  | ContinueStmt -> M.ContinueStmt 
-  | ReturnStmt -> M.ReturnStmt 
-  | ForStmt _ -> M.ForStmt 
-  | WhileStmt _ ->  M.WhileStmt
-  | TryStmt _ -> M.TryStmt
-  | SwitchStmt _ -> M.SwitchStmt
-  | SwitchCaseBlock _ -> M.SwitchCaseBlock
-  | DefaultCaseBlock _ -> M.DefaultCaseBlock
-  | IfStmt _ -> M.IfStmt 
-  | IfBlock _ -> M.IfBlock 
-  | ElseBlock _ -> M.ElseBlock
-  | Expr -> M.Expr 
-  | RangeExpr _ -> M.RangeExpr
-  | ColonExpr -> M.ColonExpr
-  | EndExpr -> M.EndExpr
-  | LValueExpr -> M.LValueExpr 
-  | NameExpr _ -> M.NameExpr 
-  | ParameterizedExpr _ -> M.ParameterizedExpr 
-  | CellIndexExpr _ -> M.CellIndexExpr 
-  | DotExpr _ -> M.DotExpr 
-  | MatrixExpr _ -> M.MatrixExpr
-  | CellArrayExpr _ -> M.CellArrayExpr 
-  | SuperClassMethodExpr _ -> M.SuperClassMethodExpr 
-  | Row _ -> M.Row 
-  | LiteralExpr -> M.LiteralExpr
-  | IntLiteralExpr -> M.IntLiteralExpr
-  | FPLiteralExpr -> M.FPLiteralExpr 
-  | StringLiteralExpr _ -> M.StringLiteralExpr
-  | UnaryExpr _ -> M.UnaryExpr 
-  | UMinusExpr _ -> M.UMinusExpr
-  | UPlusExpr _ -> M.UPlusExpr 
-  | NotExpr _ -> M.NotExpr
-  | MTransposeExpr _ -> M.MTransposeExpr
-  | ArrayTransposeExpr _ -> M.ArrayTransposeExpr
-  | BinaryExpr _ -> M.BinaryExpr 
-  | PlusExpr _ -> M.PlusExpr 
-  | MinusExpr _ -> M.MinusExpr
-  | MTimesExpr _ -> M.MTimesExpr
-  | MDivExpr _ -> M.MDivExpr 
-  | MLDivExpr _ -> M.MLDivExpr
-  | MPowExpr _ -> M.MPowExpr 
-  | ETimesExpr _ -> M.ETimesExpr
-  | EDivExpr _ -> M.EDivExpr 
-  | ELDivExpr _ -> M.ELDivExpr
-  | EPowExpr _ -> M.EPowExpr 
-  | AndExpr _ -> M.AndExpr 
-  | OrExpr _ -> M.OrExpr 
-  | ShortCircuitAndExpr _ -> M.ShortCircuitAndExpr
-  | ShortCircuitOrExpr _ -> M.ShortCircuitOrExpr 
-  | LTExpr _ -> M.LTExpr
-  | GTExpr _ -> M.GTExpr
-  | LEExpr _ -> M.LEExpr
-  | GEExpr _ -> M.GEExpr
-  | EQExpr _ -> M.EQExpr
-  | NEExpr _ -> M.NEExpr
-  | FunctionHandleExpr _ -> M.FunctionHandleExpr
-  | LambdaExpr _ -> M.LambdaExpr
 
 (* each analysis will reset it for its own needs *)  
 let analysistype : domain option ref = ref None
@@ -163,8 +98,10 @@ let typeMerge ctx (Merge (i1, i2, e)) =
     let e' = typeExpr ctx' e in
     Merge (i1, i2, e')
 
+
 let rec gatherPat = function
-  | Stmt -> []
+  | (M.Stmt, []) -> []
+(*
   | ExprStmt m -> gatherPat' (Matlab M.Expr) m
   | AssignStmt (m1, m2) -> 
     List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
@@ -196,11 +133,12 @@ let rec gatherPat = function
   | CellArrayExpr _ -> [] (* TODO *)
   | SuperClassMethodExpr _ -> [] (* TODO *)
   (* ... *)
+*)
 
-and gatherPat' t : mpat -> (id * domain) list = function
-  | Var i -> [(i, t)]
-  | Node m -> gatherPat m
-  | NodeAs (i, m) -> (i, t) :: (gatherPat m) 
+and gatherPat' t = function
+  | M.Var i -> [(i, t)]
+  | M.Node m -> gatherPat m
+  | M.NodeAs (i, m) -> (i, t) :: (gatherPat m) 
 
 let rec typeStmts ctx = function
   | [] -> []
@@ -231,8 +169,8 @@ and typeStmt ctx = function
       else
         raise (Error (MismatchedTypeAssignment (a, t, d)))
 
-let typeFlowBranch ctx node (pat, sl) =  
-  let ctx1 = (node, Matlab (decidetp pat)) :: ctx in
+let typeFlowBranch ctx node ((tp, vl) as pat, sl) =  
+  let ctx1 = (node, Matlab tp) :: ctx in
   let ctx' = List.append (gatherPat pat) ctx1 in
   let sl' = typeStmts ctx' sl in
   (pat, sl')
@@ -244,10 +182,27 @@ let rec typeFExpr = function
   | Var i -> [(i, gettype ())]
 
 let typeFlow ctx (Flow (i, (i', fe), cl)) =
-  let ctx' = (Id "in", gettype()) :: (Id "out", gettype()) :: ctx in
+  let ctx' = ("in", gettype()) :: ("out", gettype()) :: ctx in
   let ctx'' = List.append (typeFExpr fe) ctx' in
   let cl' = List.map (typeFlowBranch ctx'' i) cl in
-  Flow (i, (i', fe), cl')
+  (* Here we collect the flow patterns by their outer ast node
+     This step is necessary to avoir duplicating methods in target language *)
+  let makePats =
+    let rec accPats (n, b) = function
+      | [] -> [(n, [b])]
+      | (n', bs) :: ns -> 
+          if n = n' then 
+            (n', b :: bs) :: ns
+          else
+               (n', bs) :: (accPats (n, b) ns)
+    in
+    let rec collectPats acc = function
+      | [] -> acc
+      | ((n, v), s) :: ps -> collectPats (accPats (n, (v, s)) acc) ps
+    in
+    collectPats [] cl'
+  in
+  CheckedFlow (i, (i', fe), makePats)
 
 (* Auxiliary functions not yet supported *)
 let typeAux ctx a = a  

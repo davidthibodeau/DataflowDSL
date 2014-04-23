@@ -1,6 +1,7 @@
 %{
 open Syntax
-module M = MatlabAst 
+open Matlab
+module M = Ast 
 
 exception Error
 exception MisformedBodies
@@ -105,28 +106,20 @@ matlabast:
 | LAMBDAEXPR {M.LambdaExpr}
 
 id:
-| i = ID {Id i}
+| i = ID {i}
 
-(* Right now it is quite abstract but can use matlab syntax for representation of nodes *)
+spat:
+| i = id {M.Var i}
+| m = pat {M.Node m}
+| i = id AS m = pat {M.NodeAs (i, m)}
 
-varnode:
+vpat:
 | i = id {Var i}
-| m = mtnode {Node m}
-| LBRACKET m = mtnode RBRACKET {Node m}
-| i = id AS m = mtnode {NodeAs (i, m)}
-| LBRACKET i = id AS m = mtnode RBRACKET {NodeAs (i, m)}
+| LBRACKET m = pat RBRACKET {M.Node m}
+| LBRACKET i = id AS m = pat RBRACKET {M.NodeAs (i, m)}
 
-mtnode: 
-| STMT {Stmt}
-| EXPRSTMT v = varnode {ExprStmt v}
-| ASSIGNSTMT l = varnode r = varnode {AssignStmt (l, r)}
-| GLOBALSTMT i = id {GlobalStmt (i)} 
-| PERSISTENTSTMT i = id {PersistentStmt (i)} 
-| SHELLCOMMANDSTMT i = id {ShellCommandStmt i}
-| BREAKSTMT {BreakStmt}
-| CONTINUESTMT {ContinueStmt}
-| RETURNSTMT {ReturnStmt}
-| NAMEEXPR v = varnode {NameExpr v}
+pat:
+| m = matlabast v = vpat* {(m, v)}
 
 direction:
 | FORWARD {Forward}
@@ -160,8 +153,8 @@ cond:
 stmt:
 | IF LBRACKET c = cond RBRACKET s = stmt {If (c, [s])}
 | IF LBRACKET c = cond RBRACKET LCURLY s = stmt* RCURLY {If (c, s)}
-| FOR LBRACKET m = varnode COLON i = id RBRACKET s = stmt {For (m, i, [s])}
-| FOR LBRACKET m = varnode COLON i = id RBRACKET LCURLY s = stmt* RCURLY {For (m, i, s)}
+| FOR LBRACKET m = spat COLON i = id RBRACKET s = stmt {For (m, i, [s])}
+| FOR LBRACKET m = spat COLON i = id RBRACKET LCURLY s = stmt* RCURLY {For (m, i, s)}
 | i = id EQ e = ntexpr SCOLON {Assign (i, e)}
 (* Syntactic sugar *)
 | i = id PEQ e = ntexpr SCOLON {Assign (i, NoTyp (Plus (NoTyp (Var i), e)))}
@@ -172,7 +165,7 @@ merge:
 | MERGE n = id; m = id EQ e = ntexpr SCOLON {Merge (n, m, e)} 
 
 node:
-| VERT m = mtnode ARR s = stmt* {(m, s)}
+| VERT m = pat ARR s = stmt* {(m, s)}
 
 fexpr:
 | x = fexpr PLUS  y = fexpr {Plus  (x, y)}
@@ -182,7 +175,8 @@ fexpr:
 | x = id {Var x}
 
 flow:
-| FLOW AT i = id IS i1 = id EQ fe = fexpr WHERE n = node* SCOLON {Flow (i, (i1, fe), n)}
+| FLOW AT i = id IS i1 = id EQ fe = fexpr WHERE n = node* SCOLON 
+    {Flow (i, (i1, fe), n)}
     
 body:
 | m = merge {M m}

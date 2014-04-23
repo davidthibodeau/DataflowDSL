@@ -1,6 +1,7 @@
 open Syntax
+open Matlab
 module T = Types
-module M = MatlabAst
+module M = Ast
 
 exception UntypedExpression
 
@@ -25,7 +26,7 @@ import ast.*;
 import nodecases.*;
 import natlab.toolkits.analysis.core.*;
 
-import com.google.common.collect.Sets;\n\n"
+import com.google.common.collect.Sets;\n"
 
 let parseOrDie = 
 "\tprivate static Program parseOrDie(String path) {
@@ -35,7 +36,7 @@ let parseOrDie =
 \t\t\tSystem.err.println(\"Parse error: \" + CompilationProblem.toStringAll(errors));
 \t\t}
 \t\treturn ast;
-\t}\n\n"
+\t}\n"
 
 let defaultInitial () =
 ("\t@Override public " ^ !stringDomain ^ " newInitialFlow() {
@@ -44,7 +45,7 @@ let defaultInitial () =
   | Some (Set _) -> "Sets.newHashSet()"
   | _ -> ""
   ) ^ ";
-\t}\n\n")
+\t}\n")
 
 let copy () =
 "\t@Override public " ^ !stringDomain ^ " copy(" ^ !stringDomain ^ " src) {
@@ -53,20 +54,20 @@ let copy () =
   | Some (Set _) -> "Sets.newHashSet(src)"
   | _ -> ""
   ) ^ ";
-\t}\n\n"
+\t}\n"
 
 
 let constructor () =
 "\tpublic " ^ !analysisName ^ "(ASTNode tree) {
 \t\tsuper(tree);
-\t}\n\n"
+\t}\n"
 
 let main () =
 "\tpublic static void main(String[] args) {
 \t\tProgram ast = parseOrDie(args[0]);
 \t\t" ^ !analysisName ^ " analysis = new " ^ !analysisName ^ "(ast);
 \t\tanalysis.analyze();
-\t}\n\n"
+\t}\n"
 
 (* \t\tprintWithAnalysisResults(ast, analysis); *)
 (* Generation *)
@@ -77,79 +78,12 @@ let rec printlvl = function
 
 (* n : current level. m : base level *)
 let rec closeinnerlvl n m =
-  if n >= m then
-    (printlvl n) ^ "}\n" ^ (closeinnerlvl (n-1) m)
-  else
-    ""
+  if n < m then "" else
+  (printlvl n) ^ "}\n" ^ (closeinnerlvl (n-1) m)
 
-let rec printtp = function
-  | M.Name -> "Name"
-  | M.Stmt -> "Stmt"
-  | M.ExprStmt -> "ExprStmt"
-  | M.AssignStmt -> "AssignStmt"
-  | M.GlobalStmt -> "GlobalStmt"
-  | M.PersistentStmt -> "PersistentStmt"
-  | M.ShellCommandStmt -> "ShellCommandStmt"
-  | M.BreakStmt -> "BreakStmt"
-  | M.ContinueStmt -> "ContinueStmt"
-  | M.ReturnStmt -> "ReturnStmt"
-  | M.ForStmt -> "ForStmt"
-  | M.WhileStmt -> "WhileStmt"
-  | M.TryStmt -> "TryStmt"
-  | M.SwitchStmt -> "SwitchStmt"
-  | M.SwitchCaseBlock -> "SwitchCaseBlock"
-  | M.DefaultCaseBlock -> "DefaultCaseBlock"
-  | M.IfStmt -> "IfStmt"
-  | M.IfBlock -> "IfBlock"
-  | M.ElseBlock -> "ElseBlock"
-  | M.Expr -> "Expr"
-  | M.RangeExpr -> "RangeExpr"
-  | M.ColonExpr -> "ColonExpr"
-  | M.EndExpr -> "EndExpr"
-  | M.LValueExpr -> "LValueExpr"
-  | M.NameExpr -> "NameExpr"
-  | M.ParameterizedExpr -> "ParameterizedExpr"
-  | M.CellIndexExpr -> "CellIndexExpr"
-  | M.DotExpr -> "DotExpr"
-  | M.MatrixExpr -> "MatrixExpr"
-  | M.CellArrayExpr -> "CellArrayExpr"
-  | M.SuperClassMethodExpr -> "SuperClassMethodExpr"
-  | M.Row -> "Row"
-  | M.LiteralExpr -> "LiteralExpr"
-  | M.IntLiteralExpr -> "IntLiteralExpr"
-  | M.FPLiteralExpr -> "FPLiteralExpr"
-  | M.StringLiteralExpr -> "StringLiteralExpr"
-  | M.UnaryExpr -> "UnaryExpr"
-  | M.UMinusExpr -> "UMinusExpr"
-  | M.UPlusExpr -> "UPlusExpr"
-  | M.NotExpr -> "NotExpr"
-  | M.MTransposeExpr -> "MTransposeExpr"
-  | M.ArrayTransposeExpr -> "ArrayTransposeExpr"
-  | M.BinaryExpr -> "BinaryExpr"
-  | M.PlusExpr -> "PlusExpr"
-  | M.MinusExpr -> "MinusExpr"
-  | M.MTimesExpr -> "MTimesExpr"
-  | M.MDivExpr -> "MDivExpr"
-  | M.MLDivExpr -> "MLDivExpr"
-  | M.MPowExpr -> "MPowExpr"
-  | M.ETimesExpr -> "ETimesExpr"
-  | M.EDivExpr -> "EDivExpr"
-  | M.ELDivExpr -> "ELDivExpr"
-  | M.EPowExpr -> "EPowExpr"
-  | M.AndExpr -> "AndExpr"
-  | M.OrExpr -> "OrExpr"
-  | M.ShortCircuitAndExpr -> "ShortCircuitAndExpr"
-  | M.ShortCircuitOrExpr -> "ShortCircuitOrExpr"
-  | M.LTExpr -> "LTExpr"
-  | M.GTExpr -> "GTExpr"
-  | M.LEExpr -> "LEExpr"
-  | M.GEExpr -> "GEExpr"
-  | M.EQExpr -> "EQExpr"
-  | M.NEExpr -> "NEExpr"
-  | M.FunctionHandleExpr -> "FunctionHandleExpr"
-  | M.LambdaExpr -> "LambdaExpr"
-
-
+let write s = output := (!output ^ s ^ "\n")
+let writeline lvl s = output := (!output ^ (printlvl lvl) ^ s ^ "\n")
+let writeclosings lvl lvl' = output := (!output ^ (closeinnerlvl lvl lvl'))
 
 let getTypeDomain () = match !typeDomain with
   | Some e -> e
@@ -158,15 +92,15 @@ let getTypeDomain () = match !typeDomain with
 let rec genDomain : domain -> string = function
   | Set d -> "Set<" ^ (genDomain d) ^ ">"
   | Tuple (d1, d2) -> "Map<" ^ (genDomain d1) ^ ", " ^ (genDomain d2) ^ ">"
-  | Name id -> genId id
-  | Matlab m -> printtp m
+  | Name id -> id
+  | Matlab m -> M.printtp m
 
 let rec genTExpr = function
   | NoTyp e -> raise UntypedExpression
   | Typ (e, t) -> genFlowExpr e
 
 and genFlowExpr e = match e with
-  | Var id -> genId id
+  | Var id -> id
   | Plus (o1, o2) -> 
     let s1 = genTExpr o1 in
     let s2 = genTExpr o2 in
@@ -183,22 +117,20 @@ and genFlowExpr e = match e with
   | Set e -> 
     let s = genTExpr e in
     "Sets.newHashSet(" ^ s ^ ")"
-       
-   
 
 let rec expandInOut = function
   | EmptySet -> EmptySet
   | Plus  (x, y) -> Plus  (expandTypInOut x, expandTypInOut y)
   | Minus (x, y) -> Minus (expandTypInOut x, expandTypInOut y)
   | Times (x, y) -> Times (expandTypInOut x, expandTypInOut y)
-  | Var (Id i) -> 
+  | Var i -> 
     if i = "in" then 
-      Var (Id "currentInSet") 
+      Var "currentInSet"
     else 
       if i = "out" then
-        Var (Id "currentOutSet")
+        Var "currentOutSet"
       else
-        Var (Id i)
+        Var i
   | Set e -> Set (expandTypInOut e)
   | Tuple (e1, e2) -> Tuple (expandTypInOut e1, expandTypInOut e2)
     
@@ -206,35 +138,31 @@ and expandTypInOut = function
       | NoTyp e -> NoTyp (expandInOut e)
       | Typ (e, t) -> Typ (expandInOut e, t)
 
-let rec methodStmt lvl access (e : mpat) tp = match e with
-  | Var i -> let _ = output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
-                                 ^ (genId i) ^ " = " ^ access ^ ";\n") in
-             lvl
-  | Node m -> 
-    let _ = output := (!output ^ (printlvl lvl) ^ "if(" ^ access ^ " instanceof " ^
-                          (printtp (T.decidetp m)) ^ ") {\n") in
+let rec methodStmt lvl access e tp = match e with
+  | M.Var i -> 
+      let _ = writeline lvl ((M.printtp tp) ^ " " ^ i ^ " = " ^ access ^ ";") in
+      lvl
+  | M.Node ((t, l) as m) -> 
+      let _ = writeline lvl ("if(" ^ access ^ " instanceof " ^ (M.printtp t) ^ ") {") in
       methodBody (lvl + 1) access m
-  | NodeAs (i, m) -> 
-    let _ = 
-      output := (!output ^ (printlvl lvl) ^ (printtp tp) ^ " " 
-                 ^ (genId i) ^ " = " ^ access ^ ";\n") in
-    let _ = output := (!output ^ (printlvl lvl) ^ "if(" ^ access ^ " instanceof " ^
-                          (printtp (T.decidetp m)) ^ ") {\n") in
-    methodBody lvl (genId i) m
+  | M.NodeAs (i, (t, l as m)) -> 
+      let _ = writeline lvl ((M.printtp tp) ^ " " ^ i ^ " = " ^ access ^ ";") in
+      let _ = writeline lvl ("if(" ^ access ^ " instanceof " ^ (M.printtp t) ^ ") {") in
+      methodBody lvl i m
 
 and methodBody lvl access e = match e with
-  | Stmt -> lvl
-  | ExprStmt p -> methodStmt lvl (access ^ ".getExpr()") p M.Expr
-  | AssignStmt (n1, n2) -> 
+  | M.Stmt, [] -> lvl
+  | M.ExprStmt, [p] -> methodStmt lvl (access ^ ".getExpr()") p M.Expr
+  | M.AssignStmt, [n1; n2] -> 
     let lvl' = methodStmt lvl (access ^ ".getLHS()") n1 M.Expr in
     methodStmt lvl' (access ^ ".getRHS()") n2 M.Expr
-  | GlobalStmt i -> lvl (* TODO: Make sure it is actually globalstmt the type... probably not *)
-  | PersistentStmt i -> lvl (* TODO *)
-  | BreakStmt -> lvl
-  | ContinueStmt -> lvl
-  | ReturnStmt -> lvl
+  | M.GlobalStmt, [i] -> lvl (* TODO: Make sure it is actually globalstmt the type... probably not *)
+  | M.PersistentStmt, [i] -> lvl (* TODO *)
+  | M.BreakStmt, [] -> lvl
+  | M.ContinueStmt, [] -> lvl
+  | M.ReturnStmt, [] -> lvl
 
-  | NameExpr i -> methodStmt lvl (access ^ ".getName()") i M.Name
+  | M.NameExpr, [i] -> methodStmt lvl (access ^ ".getName()") i M.Name
 
 
 let genCond = function
@@ -244,19 +172,18 @@ let genCond = function
 
 let rec genStmt lvl = function
   | If (c, sl) -> 
-    let _ = output := (!output ^ (printlvl lvl) ^ "if (" ^ (genCond c) ^ ") {\n") in
-    let _ = List.iter (genStmt (lvl + 1)) sl in
-    output := (!output ^ (closeinnerlvl lvl lvl))
+      let _ = writeline lvl ("if (" ^ (genCond c) ^ ") {") in
+      let _ = List.iter (genStmt (lvl + 1)) sl in
+      writeclosings lvl lvl
   | For (m, i, sl) ->
-    let _ = output := (!output ^ (printlvl lvl) ^ "for (  ) {\n") in
-    let _ = List.iter (genStmt (lvl + 1)) sl in
-    output := (!output ^ (closeinnerlvl lvl lvl))
+      let _ = writeline lvl ("for (  ) {") in
+      let _ = List.iter (genStmt (lvl + 1)) sl in
+      writeclosings lvl lvl
   | Assign (i, e) -> 
-    output := (!output ^ (printlvl lvl) ^ (genId i) ^ " = " 
-               ^ (genTExpr e) ^ ";\n")
+      writeline lvl (i ^ " = " ^ (genTExpr e) ^ ";")
 
 let rec genFExpr = function
-  | Var id -> genId id
+  | Var id -> id
   | Plus (o1, o2) -> 
     let s1 = genFExpr o1 in
     let s2 = genFExpr o2 in
@@ -273,36 +200,36 @@ let rec genFExpr = function
 let genBranch nodeName initend e =
   let (init, cp, ending) = initend in
   let _ = match e with
-    | (AssignStmt (m1, m2), sl) ->
+    | (M.AssignStmt, [m1; m2]), sl ->
       let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
                          ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
       let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
       let lvl2 = methodStmt lvl1 (nodeName ^ ".getRHS()") m2 M.Expr in
       let _ = List.iter (genStmt lvl2) sl in
-      output := (!output ^ (closeinnerlvl (lvl2 - 1) 2))
-    | (Stmt, sl) ->
+      writeclosings (lvl2 - 1) 2
+    | (M.Stmt, []), sl ->
       let _ = output := (!output ^ "\t@Override public void caseStmt(Stmt " 
                          ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
       List.iter (genStmt 2) sl
   in
-  let _ = output := (!output ^ "\t\t" ^ cp ^ "\n") in
-  let _ = output := (!output ^ "\t\t" ^ ending ^ "\n") in
-  let _ = output := (!output ^ "\t}\n\n") in
+  let _ = writeline 2 cp in
+  let _ = writeline 2 ending in
+  let _ = writeline 1 "\n" in
   ()
     
 let genFlow = function
   | Flow (i, (i', fe), bs) ->
-    let nodeName = (genId i) in
+    let nodeName = i in
     let initend = match !direction with
       | Some Forward ->
-        if genId i' = "out" then
+        if i' = "out" then
           ("inFlowSets.put(node, copy(currentInSet));",
            "currentOutSet = " ^ (genFExpr fe),
            "outFlowSets.put(node, copy(currentOutSet));")
         else
           assert false
       | Some Backward -> 
-        if genId i' = "in" then
+        if i' = "in" then
           ("inFlowSets.put(node, copy(currentInSet));",
            "currentInSet = " ^ (genFExpr fe),
            "outFlowSets.put(node, copy(currentOutSet));")
@@ -320,12 +247,13 @@ let genDirection d =
 
 
 let genMerge (Merge (i1, i2, e)) =
-  let _ = output := (!output ^ "\t@Override public " ^ !stringDomain ^ " merge(" 
-                     ^ !stringDomain ^ " " ^ (genId i1) ^ ", " ^ !stringDomain 
-                     ^ " " ^ genId i2 ^ ") {\n") in
+  let s = ("@Override public " ^ !stringDomain ^ " merge(" ^ !stringDomain ^ " " 
+           ^ i1 ^ ", " ^ !stringDomain ^ " " ^ i2 ^ ") {") 
+  in
+  let _ = writeline 1 s in
   let s = genTExpr e in
-  let _ = output := (!output ^ "\t\treturn Sets.newHashSet(" ^ s ^ ");\n") in
-  output := (!output ^ "\t}\n\n")
+  let _ = writeline 2 ("return Sets.newHashSet(" ^ s ^ ");") in
+  writeline 1 "}\n"
 
 let genBodies = function
   | Body (i, m, f, a) -> 
@@ -336,20 +264,21 @@ let genBodies = function
 let genAnalysis = function
   | Analysis (name, direction, domain, bodies) ->
     let _ = output := "" in
-    let _ = analysisName := (genId name) in
+    let _ = analysisName := name in
     let _ = stringDomain := (genDomain domain) in
     let _ = typeDomain := (Some domain) in
-    let _ = output := !output ^ imports in
-    let _ = output := !output ^ "public class " ^ !analysisName ^ " extends " 
-              ^ (genDirection direction) ^ "<" ^ !stringDomain ^ "> {\n" in
-    let _ = output := !output ^ parseOrDie in
-    let _ = output := !output ^ (main ()) in
-    let _ = output := !output ^ (constructor ()) in
-    let _ = output := !output ^ (defaultInitial ()) in
-    let _ = output := !output ^ (copy ()) in
+    let _ = write imports in
+    let _ = write ("public class " ^ !analysisName ^ " extends " 
+                   ^ (genDirection direction) ^ "<" ^ !stringDomain ^ "> {") 
+    in
+    let _ = write parseOrDie in
+    let _ = write (main ()) in
+    let _ = write (constructor ()) in
+    let _ = write (defaultInitial ()) in
+    let _ = write (copy ()) in
     let _ = genBodies bodies in
     (* Ajouter le reste du body *)
-    let _ = output := !output ^ "}\n" in
+    let _ = write "}" in
     print_endline !output          
 
 let codegen = function 
