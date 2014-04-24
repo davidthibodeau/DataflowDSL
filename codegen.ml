@@ -83,6 +83,9 @@ let rec closeinnerlvl n m =
 
 let write s = output := (!output ^ s ^ "\n")
 let writeline lvl s = output := (!output ^ (printlvl lvl) ^ s ^ "\n")
+let writecase node case = output := 
+  (!output ^ "\t@Override public void case" ^ case ^ "(" ^ case ^ " " ^ node ^ ") {\n")
+
 let writeclosings lvl lvl' = output := (!output ^ (closeinnerlvl lvl lvl'))
 
 let getTypeDomain () = match !typeDomain with
@@ -197,20 +200,24 @@ let rec genFExpr = function
     let s2 = genFExpr o2 in
      "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
 
-let genBranch nodeName initend e =
+let genBranch nodeName initend (a, ll) =
   let (init, cp, ending) = initend in
-  let _ = match e with
-    | (M.AssignStmt, [m1; m2]), sl ->
-      let _ = output := (!output ^ "\t@Override public void caseAssignStmt(AssignStmt " 
-                         ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
+  let _ = match a with
+    | M.AssignStmt ->
+      let _ = writecase nodeName "AssignStmt" in
+      let _ = writeline 2 init in ()
+  (* Write defs vars from flow stmt  
+     Note: Should simply call a function doing it since it will appear in each case *)
+
+(*
       let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
       let lvl2 = methodStmt lvl1 (nodeName ^ ".getRHS()") m2 M.Expr in
       let _ = List.iter (genStmt lvl2) sl in
       writeclosings (lvl2 - 1) 2
-    | (M.Stmt, []), sl ->
-      let _ = output := (!output ^ "\t@Override public void caseStmt(Stmt " 
-                         ^ nodeName ^ ") {\n\t\t" ^ init (* ^ def vars *) ^ "\n") in
-      List.iter (genStmt 2) sl
+ *)
+    | M.Stmt ->
+        let _ = writecase nodeName "Stmt" in
+        let _ = writeline 2 init in ()
   in
   let _ = writeline 2 cp in
   let _ = writeline 2 ending in
@@ -218,7 +225,7 @@ let genBranch nodeName initend e =
   ()
     
 let genFlow = function
-  | Flow (i, (i', fe), bs) ->
+  | CheckedFlow (i, (i', fe), bs) ->
     let nodeName = i in
     let initend = match !direction with
       | Some Forward ->
@@ -230,9 +237,9 @@ let genFlow = function
           assert false
       | Some Backward -> 
         if i' = "in" then
-          ("inFlowSets.put(node, copy(currentInSet));",
+          ("outFlowSets.put(node, copy(currentOutSet));",
            "currentInSet = " ^ (genFExpr fe),
-           "outFlowSets.put(node, copy(currentOutSet));")
+           "inFlowSets.put(node, copy(currentInSet));")
         else
           assert false
     in

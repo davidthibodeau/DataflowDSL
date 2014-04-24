@@ -99,41 +99,33 @@ let typeMerge ctx (Merge (i1, i2, e)) =
     Merge (i1, i2, e')
 
 
-let rec gatherPat = function
-  | (M.Stmt, []) -> []
-(*
-  | ExprStmt m -> gatherPat' (Matlab M.Expr) m
-  | AssignStmt (m1, m2) -> 
-    List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
-  | GlobalStmt _ -> [] (* TODO *)
-  | PersistentStmt _ -> [] (* TODO *)
-  | ShellCommandStmt _ -> [] (* TODO *)
-  | BreakStmt -> []
-  | ContinueStmt -> []
-  | ReturnStmt -> []
-  | ForStmt (m, l) -> (l, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.AssignStmt) m)
-  | WhileStmt (m, l) -> (l, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.Expr) m)
-  | TryStmt (l1, l2) -> (l1, Set (Matlab M.Stmt)) :: [(l2, Set (Matlab M.Stmt))]
-  | SwitchStmt _ -> [] (* TODO *)
-  | SwitchCaseBlock _ -> [] (* TODO *)
-  | DefaultCaseBlock _ -> [] (* TODO *)
-  | IfStmt _ -> [] (* TODO *)
-  | IfBlock (m, l) ->  (l, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.Expr) m)
-  | ElseBlock l -> [(l, Set (Matlab M.Stmt))]
-  | Expr -> []
-  | RangeExpr _ -> [] (* TODO *)
-  | ColonExpr -> []
-  | EndExpr -> []
-  | LValueExpr -> []
-  | NameExpr m -> gatherPat' (Matlab M.Expr) m
-  | ParameterizedExpr _ -> [] (* TODO *)
-  | CellIndexExpr _ -> [] (* TODO *)
-  | DotExpr _ -> [] (* TODO *)
-  | MatrixExpr _ -> [] (* TODO *)
-  | CellArrayExpr _ -> [] (* TODO *)
-  | SuperClassMethodExpr _ -> [] (* TODO *)
-  (* ... *)
-*)
+let rec gatherPat : M.ast * M.vpat list -> (id * domain) list = function
+  | M.Stmt, [] -> []
+  | M.ExprStmt, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.AssignStmt, [m1; m2] -> 
+      List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.GlobalStmt, [M.Var i] -> [i, Set (Matlab M.Name)]
+  | M.PersistentStmt, [M.Var i] -> [i, Set (Matlab M.Name)]
+(*  | M.ShellCommandStmt, [M.Var i as m] -> gatherPat' (Set (Matlab M.Name)) m *)
+  | M.BreakStmt, [] -> []
+  | M.ContinueStmt, [] -> []
+  | M.ReturnStmt, [] -> []
+  | M.ForStmt, [m; M.Var i] -> (i, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.AssignStmt) m)
+  | M.WhileStmt, [m; M.Var i] -> (i, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.Expr) m)
+  | M.TryStmt, [M.Var i1; M.Var i2] -> [i1, Set (Matlab M.Stmt); i2, Set (Matlab M.Stmt)]
+(*  | M.SwitchStmt, [m; M.Var i1; M.Var i2] -> *)
+  | M.SwitchCaseBlock, [m; M.Var i] -> (i, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.Expr) m)
+  | M.DefaultCaseBlock, [M.Var i] -> [i, Set (Matlab M.Stmt)]
+(*  | M.IfStmt, *)
+  | M.IfBlock, [m; M.Var i] -> (i, Set (Matlab M.Stmt)) :: (gatherPat' (Matlab M.Expr) m)
+  | M.ElseBlock, [M.Var i] -> [i, Set (Matlab M.Stmt)]
+  | M.Expr, [] -> []
+(*  | M.RangeExpr *)
+  | M.ColonExpr, [] -> []
+  | M.EndExpr, [] -> []
+  | M.LValueExpr, [] -> []
+  | M.NameExpr, [m] -> gatherPat' (Matlab M.Expr) m
+(* ... *)
 
 and gatherPat' t = function
   | M.Var i -> [(i, t)]
