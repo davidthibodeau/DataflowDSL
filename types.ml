@@ -10,6 +10,7 @@ type error =
 | MismatchedTypeExpression of expr * expr
 | MismatchedTypeConditional of domain * domain
 | UndefinedVariable of ctx * id
+| InvalidPatternDecl of M.pat
 
 let errctx : ctx ref = ref []
 let errte : (expr * expr) option ref = ref None
@@ -125,7 +126,47 @@ let rec gatherPat : M.ast * M.vpat list -> (id * domain) list = function
   | M.EndExpr, [] -> []
   | M.LValueExpr, [] -> []
   | M.NameExpr, [m] -> gatherPat' (Matlab M.Expr) m
-(* ... *)
+  | M.ParameterizedExpr, [m; M.Var i] -> (i, Set (Matlab M.Expr)) :: (gatherPat' (Matlab M.Expr) m)
+  | M.CellIndexExpr, [m; M.Var i] -> (i, Set (Matlab M.Expr)) :: (gatherPat' (Matlab M.Expr) m)
+  | M.DotExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Name) m2)
+  | M.MatrixExpr, [M.Var i] -> [i, Set (Matlab M.Row)]
+  | M.CellArrayExpr, [M.Var i] -> [i, Set (Matlab M.Row)]
+  | M.SuperClassMethodExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Name) m1) (gatherPat' (Matlab M.Name) m2)
+  | M.Row, [M.Var i] -> [i, Set (Matlab M.Expr)]
+  | M.LiteralExpr, [] -> []
+ (* | M.IntLiteralExpr,  *)
+ (* | FPLiteralExpr, *)
+ (* | StringLiteralExpr, *)
+  | M.UnaryExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.UMinusExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.UPlusExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.NotExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.MTransposeExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.ArrayTransposeExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.BinaryExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.PlusExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.MinusExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.MTimesExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.MDivExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.MLDivExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.MPowExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.ETimesExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.EDivExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.ELDivExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.EPowExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.AndExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.OrExpr,  [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.ShortCircuitAndExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.ShortCircuitOrExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.LTExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.GTExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.LEExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.GEExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.EQExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.NEExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
+  | M.FunctionHandleExpr, [m] -> gatherPat' (Matlab M.Name) m
+  | M.LambdaExpr, [M.Var i; m] -> (i, Set (Matlab M.Name)) :: (gatherPat' (Matlab M.Expr) m)
+  | _, _ as p -> raise (Error (InvalidPatternDecl p)) 
 
 and gatherPat' t = function
   | M.Var i -> [(i, t)]

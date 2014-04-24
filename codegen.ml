@@ -202,12 +202,14 @@ let rec genFExpr = function
 
 let genBranch nodeName initend (a, ll) =
   let (init, cp, ending) = initend in
+  let _ = writecase nodeName (M.printtp a) in
+  let _ = writeline 2 init in
+    (* Write defs vars from flow stmt  *)
   let _ = match a with
-    | M.AssignStmt ->
-      let _ = writecase nodeName "AssignStmt" in
-      let _ = writeline 2 init in ()
-  (* Write defs vars from flow stmt  
-     Note: Should simply call a function doing it since it will appear in each case *)
+    | M.AssignStmt -> ()
+      
+
+
 
 (*
       let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
@@ -215,9 +217,7 @@ let genBranch nodeName initend (a, ll) =
       let _ = List.iter (genStmt lvl2) sl in
       writeclosings (lvl2 - 1) 2
  *)
-    | M.Stmt ->
-        let _ = writecase nodeName "Stmt" in
-        let _ = writeline 2 init in ()
+    | M.Stmt -> ()
   in
   let _ = writeline 2 cp in
   let _ = writeline 2 ending in
