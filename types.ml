@@ -101,6 +101,7 @@ let typeMerge ctx (Merge (i1, i2, e)) =
 
 
 let rec gatherPat : M.ast * M.vpat list -> (id * domain) list = function
+  | M.Name, [] -> []
   | M.Stmt, [] -> []
   | M.ExprStmt, [m] -> gatherPat' (Matlab M.Expr) m
   | M.AssignStmt, [m1; m2] -> 
@@ -219,7 +220,7 @@ let typeFlow ctx (Flow (i, (i', fe), cl)) =
   let ctx'' = List.append (typeFExpr fe) ctx' in
   let cl' = List.map (typeFlowBranch ctx'' i) cl in
   (* Here we collect the flow patterns by their outer ast node
-     This step is necessary to avoir duplicating methods in target language *)
+     This step is necessary to avoid duplicating methods in target language *)
   let makePats =
     let rec accPats (n, b) = function
       | [] -> [(n, [b])]
@@ -233,7 +234,7 @@ let typeFlow ctx (Flow (i, (i', fe), cl)) =
       | [] -> acc
       | ((n, v), s) :: ps -> collectPats (accPats (n, (v, s)) acc) ps
     in
-    collectPats [] cl'
+    List.map (fun (a, l) -> a, List.rev l) (collectPats [] cl')
   in
   CheckedFlow (i, (i', fe), makePats)
 

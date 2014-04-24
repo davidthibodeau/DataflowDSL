@@ -60,7 +60,7 @@ rule lex state = parse
 | "Stmt" {STMT}
 | "AssignStmt" {ASSIGNSTMT}
 | "ExprStmt" {EXPRSTMT}
-
+| "Name" {NAME}
 | "NameExpr" {NAMEEXPR}
 
 | "/*" {state := (CommentLevel 0); comment state lexbuf } (*Comments are just ignored *)

@@ -122,51 +122,195 @@ and genFlowExpr e = match e with
     "Sets.newHashSet(" ^ s ^ ")"
 
 let rec expandInOut = function
-  | EmptySet -> EmptySet
-  | Plus  (x, y) -> Plus  (expandTypInOut x, expandTypInOut y)
-  | Minus (x, y) -> Minus (expandTypInOut x, expandTypInOut y)
-  | Times (x, y) -> Times (expandTypInOut x, expandTypInOut y)
+  | Plus  (x, y) -> Plus  (expandInOut x, expandInOut y)
+  | Minus (x, y) -> Minus (expandInOut x, expandInOut y)
+  | Times (x, y) -> Times (expandInOut x, expandInOut y)
   | Var i -> 
-    if i = "in" then 
-      Var "currentInSet"
-    else 
-      if i = "out" then
+      if i = "in" then 
+        Var "currentInSet"
+      else if i = "out" then
         Var "currentOutSet"
       else
         Var i
-  | Set e -> Set (expandTypInOut e)
-  | Tuple (e1, e2) -> Tuple (expandTypInOut e1, expandTypInOut e2)
-    
-and expandTypInOut = function
-      | NoTyp e -> NoTyp (expandInOut e)
-      | Typ (e, t) -> Typ (expandInOut e, t)
 
-let rec methodStmt lvl access e tp = match e with
-  | M.Var i -> 
-      let _ = writeline lvl ((M.printtp tp) ^ " " ^ i ^ " = " ^ access ^ ";") in
-      lvl
+let rec methodStmt access e tp = 
+  let acc tp = "((" ^ (genDomain tp) ^ ") " ^ access ^ ")" in
+  match e with
+  | M.Var i -> [(genDomain tp) ^ " " ^ i ^ " = " ^ access ^ ";"], []
   | M.Node ((t, l) as m) -> 
-      let _ = writeline lvl ("if(" ^ access ^ " instanceof " ^ (M.printtp t) ^ ") {") in
-      methodBody (lvl + 1) access m
+      let decls, insts = methodBody (acc (Matlab t)) m in
+      let insts' = (access ^ " instanceof " ^ (M.printtp t)) :: insts in
+      decls, insts'
   | M.NodeAs (i, (t, l as m)) -> 
-      let _ = writeline lvl ((M.printtp tp) ^ " " ^ i ^ " = " ^ access ^ ";") in
-      let _ = writeline lvl ("if(" ^ access ^ " instanceof " ^ (M.printtp t) ^ ") {") in
-      methodBody lvl i m
-
-and methodBody lvl access e = match e with
-  | M.Stmt, [] -> lvl
-  | M.ExprStmt, [p] -> methodStmt lvl (access ^ ".getExpr()") p M.Expr
-  | M.AssignStmt, [n1; n2] -> 
-    let lvl' = methodStmt lvl (access ^ ".getLHS()") n1 M.Expr in
-    methodStmt lvl' (access ^ ".getRHS()") n2 M.Expr
-  | M.GlobalStmt, [i] -> lvl (* TODO: Make sure it is actually globalstmt the type... probably not *)
-  | M.PersistentStmt, [i] -> lvl (* TODO *)
-  | M.BreakStmt, [] -> lvl
-  | M.ContinueStmt, [] -> lvl
-  | M.ReturnStmt, [] -> lvl
-
-  | M.NameExpr, [i] -> methodStmt lvl (access ^ ".getName()") i M.Name
-
+      let decls, insts = methodBody (acc (Matlab t)) m in
+      let decls' = ((genDomain tp) ^ " " ^ i ^ " = " ^ (acc (Matlab t)) ^ ";") :: decls in
+      let insts' = (access ^ " instanceof " ^ (M.printtp t)) :: insts in
+      decls', insts'
+      
+and methodBody access e = 
+  let acc s = access ^ s in
+  match e with
+  | M.Stmt, [] -> [], []
+  | M.ExprStmt, [m] -> methodStmt (acc ".getExpr()") m (Matlab M.Expr)
+  | M.AssignStmt, [m1; m2] ->  
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.GlobalStmt, [m] -> methodStmt (acc ".getNames()") m (Set (Matlab M.Name))
+  | M.PersistentStmt, [m] -> methodStmt (acc ".getNames()") m (Set (Matlab M.Name))
+(*  | M.ShellCommandStmt,  *)
+  | M.BreakStmt, [] -> [], []
+  | M.ContinueStmt, [] -> [], []
+  | M.ReturnStmt, [] -> [], []
+  | M.ForStmt, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getAssignStmt()") m1 (Matlab M.AssignStmt) in
+      let decls2, insts2 = methodStmt (acc ".getStmts()") m2 (Set (Matlab M.Stmt)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.WhileStmt, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getExpr()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getStmts()") m2 (Set (Matlab M.Stmt)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.TryStmt, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getTryStmts()") m1 (Set (Matlab M.Stmt)) in
+      let decls2, insts2 = methodStmt (acc ".getCatchStmts()") m2 (Set (Matlab M.Stmt)) in
+      List.append decls1 decls2, List.append insts1 insts2
+(*  | M.SwitchStmt,  *)
+  | M.SwitchCaseBlock, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getExpr()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getStmts()") m2 (Set (Matlab M.Stmt)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.DefaultCaseBlock, [m] -> methodStmt (acc ".getStmts()") m (Set (Matlab M.Stmt))
+(*  | M.IfStmt, *)
+  | M.IfBlock, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getCondition()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getStmts()") m2 (Set (Matlab M.Stmt)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.ElseBlock, [m] -> methodStmt (acc ".getStmts()") m (Set (Matlab M.Stmt))
+  | M.Expr, [] -> [], []
+(*  | M.RangeExpr *)
+  | M.ColonExpr, [] -> [], []
+  | M.EndExpr, [] -> [], []
+  | M.LValueExpr, [] -> [], []
+  | M.NameExpr, [m] -> methodStmt (acc ".getName()") m (Matlab M.Name)
+  | M.ParameterizedExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getTarget()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getArgs()") m2 (Set (Matlab M.Expr)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.CellIndexExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getTarget()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getArgs()") m2 (Set (Matlab M.Expr)) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.DotExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getTarget()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getField()") m2 (Matlab M.Name) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.MatrixExpr, [m] -> methodStmt (acc ".getRows()") m (Set (Matlab M.Row))
+  | M.CellArrayExpr, [m] -> methodStmt (acc ".getRows()") m (Set (Matlab M.Row))
+  | M.SuperClassMethodExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getFuncName()") m1 (Matlab M.Name) in
+      let decls2, insts2 = methodStmt (acc ".getClassName()") m2 (Matlab M.Name) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.Row, [m] -> methodStmt (acc ".getElements()") m (Set (Matlab M.Expr))
+  | M.LiteralExpr, [] -> [], []
+ (* | M.IntLiteralExpr,  *)
+ (* | FPLiteralExpr, *)
+ (* | StringLiteralExpr, *)
+  | M.UnaryExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr)
+  | M.UMinusExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr)
+  | M.UPlusExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr) 
+  | M.NotExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr)
+  | M.MTransposeExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr)
+  | M.ArrayTransposeExpr, [m] -> methodStmt (acc ".getOperand()") m (Matlab M.Expr)
+  | M.BinaryExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.PlusExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.MinusExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.MTimesExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.MDivExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2 
+  | M.MLDivExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.MPowExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.ETimesExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.EDivExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.ELDivExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.EPowExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.AndExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.OrExpr,  [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.ShortCircuitAndExpr, [m1; m2] ->
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.ShortCircuitOrExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.LTExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.GTExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.LEExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.GEExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.EQExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.NEExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getLHS()") m1 (Matlab M.Expr) in
+      let decls2, insts2 = methodStmt (acc ".getRHS()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | M.FunctionHandleExpr, [m] -> methodStmt (acc ".getName()") m (Matlab M.Name)
+  | M.LambdaExpr, [m1; m2] -> 
+      let decls1, insts1 = methodStmt (acc ".getInputParams()") m1 (Set (Matlab M.Name)) in
+      let decls2, insts2 = methodStmt (acc ".getBody()") m2 (Matlab M.Expr) in
+      List.append decls1 decls2, List.append insts1 insts2
+  | _, _ -> assert false 
 
 let genCond = function
   | True -> "true"
@@ -186,65 +330,75 @@ let rec genStmt lvl = function
       writeline lvl (i ^ " = " ^ (genTExpr e) ^ ";")
 
 let rec genFExpr = function
-  | Var id -> id
+  | Var id -> 
+      if id = "currentInSet" || id = "currentOutSet" then
+        [], id
+      else 
+        [id], id
   | Plus (o1, o2) -> 
-    let s1 = genFExpr o1 in
-    let s2 = genFExpr o2 in
-     "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
+    let dv1, s1 = genFExpr o1 in
+    let dv2, s2 = genFExpr o2 in
+     List.append dv1 dv2, "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
   | Minus (o1, o2) -> 
-    let s1 = genFExpr o1 in
-    let s2 = genFExpr o2 in
-    "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
+    let dv1, s1 = genFExpr o1 in
+    let dv2, s2 = genFExpr o2 in
+    List.append dv1 dv2, "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
   | Times (o1, o2) -> 
-    let s1 = genFExpr o1 in
-    let s2 = genFExpr o2 in
-     "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
+    let dv1, s1 = genFExpr o1 in
+    let dv2, s2 = genFExpr o2 in
+     List.append dv1 dv2, "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
 
-let genBranch nodeName initend (a, ll) =
+let genInsts l = List.fold_right (fun x y -> x ^ " && " ^ y) l "true"
+
+
+let genPat b (ifs, decls, stmts) = 
+  let s = match b with true -> "if (" | false -> "else if (" in
+  let _ = writeline 2 (s ^ (genInsts ifs) ^ ") {") in 
+  let _ = List.iter (writeline 3) decls in
+  let _ = List.iter (genStmt 3) stmts in
+  writeclosings 2 2
+  
+let genBranch nodeName initend dvars (a, ll) =
   let (init, cp, ending) = initend in
   let _ = writecase nodeName (M.printtp a) in
   let _ = writeline 2 init in
-    (* Write defs vars from flow stmt  *)
-  let _ = match a with
-    | M.AssignStmt -> ()
-      
-
-
-
-(*
-      let lvl1 = methodStmt 2 (nodeName ^ ".getLHS()") m1 M.Expr in
-      let lvl2 = methodStmt lvl1 (nodeName ^ ".getRHS()") m2 M.Expr in
-      let _ = List.iter (genStmt lvl2) sl in
-      writeclosings (lvl2 - 1) 2
- *)
-    | M.Stmt -> ()
-  in
+  let f = fun x -> writeline 2 (!stringDomain ^ " " ^ x ^ " = Sets.newHashSet();") in
+  let _ = List.iter f dvars in
+  let f' = fun (vl, sl) -> let (decls, ifs) = methodBody nodeName (a, vl) in (ifs, decls, sl) in
+  let _ = match List.map f' ll with 
+  | [] -> assert false
+  | [ll'] -> genPat true ll'
+  | ll' :: lls -> let _ = genPat true ll' in List.iter (genPat false) lls
+  in   
   let _ = writeline 2 cp in
   let _ = writeline 2 ending in
+  let _ = writeclosings 1 1 in
   let _ = writeline 1 "\n" in
   ()
     
 let genFlow = function
   | CheckedFlow (i, (i', fe), bs) ->
     let nodeName = i in
+    let fe' = expandInOut fe in
+    let (dvars, cp) = genFExpr fe' in
     let initend = match !direction with
       | Some Forward ->
         if i' = "out" then
           ("inFlowSets.put(node, copy(currentInSet));",
-           "currentOutSet = " ^ (genFExpr fe),
+           "currentOutSet = " ^ cp,
            "outFlowSets.put(node, copy(currentOutSet));")
         else
           assert false
       | Some Backward -> 
         if i' = "in" then
           ("outFlowSets.put(node, copy(currentOutSet));",
-           "currentInSet = " ^ (genFExpr fe),
+           "currentInSet = " ^ cp,
            "inFlowSets.put(node, copy(currentInSet));")
         else
           assert false
     in
-    List.iter (genBranch nodeName initend) bs
-                           
+    List.iter (genBranch nodeName initend dvars) bs
+  | _ -> assert false                           
 
 let genDirection d = 
   let _ = direction := (Some d) in
