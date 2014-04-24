@@ -33,7 +33,7 @@ type cond =
 
 type stmt =
 | If of cond * stmt list
-| For of M.vpat * id * stmt list
+| For of M.vpat * id * domain option * stmt list
 | Assign of id * expr
 
 type fexpr = 

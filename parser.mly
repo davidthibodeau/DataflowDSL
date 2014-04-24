@@ -1,7 +1,8 @@
 %{
 open Syntax
 open Matlab
-module M = Ast 
+
+module M = Ast
 
 exception Error
 exception MisformedBodies
@@ -14,25 +15,14 @@ exception MisformedBodies
 %token SET EMPTYSET
 %token LBRACKET RBRACKET LCURLY RCURLY
 %token COLON SCOLON EOF COMMA
-%token ANALYSIS ENUM OF
+%token ANALYSIS OF
 %token MERGE FLOW AT IS WHERE VERT ARR AS
 %token OUTEND INSTART
 %token PLUS MINUS TIMES
-%token IF FOR EEQ PEQ MEQ LEQ GEQ TEQ
+%token IF FOR EEQ PEQ MEQ TEQ
 %token EQ TRUE FALSE
 
-(* Tokens defined for matlab nodes *)
-%token STMT EXPRSTMT ASSIGNSTMT GLOBALSTMT PERSISTENTSTMT SHELLCOMMANDSTMT 
-%token BREAKSTMT CONTINUESTMT RETURNSTMT NAME
-%token FORSTMT WHILESTMT TRYSTMT SWITCHSTMT SWITCHCASEBLOCK IFSTMT IFBLOCK ELSEBLOCK
-%token EXPR RANGEEXPR COLONEXPR ENDEXPR LVALUEEXPR NAMEEXPR PARAMETERIZEDEXPR 
-%token CELLINDEXEXPR DOTEXPR MATRIXEXPR CELLARRAYEXPR SUPERCLASSMETHODEXPR ROW
-%token LITERALEXPR INTLITERALEXPR FPLITERALEXPR STRINGLITERALEXPR
-%token UNARYEXPR UMINUSEXPR UPLUSEXPR NOTEXPR MTRANSPOSEEXPR ARRAYTRANSPOSEEXPR
-%token BINARYEXPR PLUSEXPR MINUSEXPR MTIMESEXPR MDIVEXPR MLDIVEXPR MPOWEXPR
-%token ETIMESEXPR EDIVEXPR ELDIVEXPR EPOWEXPR
-%token ANDEXPR OREXPR SHORTCIRCUITANDEXPR SHORTCIRCUITOREXPR
-%token LTEXPR GTEXPR LEEXPR GEEXPR EQEXPR NEEXPR FUNCTIONHANDLEEXPR LAMBDAEXPR
+%token <Matlab.Ast.ast>MATLAB
 
 %left PLUS MINUS
 %left TIMES
@@ -40,7 +30,9 @@ exception MisformedBodies
 %%
 
 matlabast:
-| NAME {M.Name}
+| m = MATLAB {m}
+
+(*| NAME {M.Name}
 | STMT {M.Stmt}
 | EXPRSTMT {M.ExprStmt}
 | ASSIGNSTMT{M.AssignStmt}
@@ -104,7 +96,7 @@ matlabast:
 | NEEXPR {M.NEExpr}
 | FUNCTIONHANDLEEXPR {M.FunctionHandleExpr}
 | LAMBDAEXPR {M.LambdaExpr}
-
+*)
 id:
 | i = ID {i}
 
@@ -114,7 +106,7 @@ spat:
 | i = id AS m = pat {M.NodeAs (i, m)}
 
 vpat:
-| i = id {Var i}
+| i = id {M.Var i}
 | LBRACKET m = pat RBRACKET {M.Node m}
 | LBRACKET i = id AS m = pat RBRACKET {M.NodeAs (i, m)}
 
@@ -153,8 +145,8 @@ cond:
 stmt:
 | IF LBRACKET c = cond RBRACKET s = stmt {If (c, [s])}
 | IF LBRACKET c = cond RBRACKET LCURLY s = stmt* RCURLY {If (c, s)}
-| FOR LBRACKET m = spat COLON i = id RBRACKET s = stmt {For (m, i, [s])}
-| FOR LBRACKET m = spat COLON i = id RBRACKET LCURLY s = stmt* RCURLY {For (m, i, s)}
+| FOR LBRACKET m = spat COLON i = id RBRACKET s = stmt {For (m, i, None, [s])}
+| FOR LBRACKET m = spat COLON i = id RBRACKET LCURLY s = stmt* RCURLY {For (m, i, None, s)}
 | i = id EQ e = ntexpr SCOLON {Assign (i, e)}
 (* Syntactic sugar *)
 | i = id PEQ e = ntexpr SCOLON {Assign (i, NoTyp (Plus (NoTyp (Var i), e)))}

@@ -1,6 +1,8 @@
 {
 open Parser
 open Lexing
+open Matlab
+module M = Ast
 exception Error of string
 
 type bufferstate =
@@ -27,15 +29,12 @@ rule lex state = parse
 | "+=" {PEQ}
 | "-=" {MEQ}
 | "*=" {TEQ}
-| "<=" {LEQ}
-| ">=" {GEQ}
 | '=' {EQ}
 | '(' {LBRACKET}
 | ')' {RBRACKET}
 | '{' {LCURLY}
 | '}' {RCURLY}
 | "analysis" {ANALYSIS}
-| "enum" {ENUM}
 | "merge" {MERGE}
 | "flow" {FLOW}
 | "at" {AT}
@@ -57,15 +56,15 @@ rule lex state = parse
 | ',' {COMMA}
 | eof {EOF}
 
-| "Stmt" {STMT}
-| "AssignStmt" {ASSIGNSTMT}
-| "ExprStmt" {EXPRSTMT}
-| "Name" {NAME}
-| "NameExpr" {NAMEEXPR}
-
 | "/*" {state := (CommentLevel 0); comment state lexbuf } (*Comments are just ignored *)
 | "//"[^ '\n']*"\n" {Lexing.new_line lexbuf; lex state lexbuf}
-| id as s       {ID (s)}
+| id as s       
+    {
+     try
+      MATLAB (Hashtbl.find M.keywords s) 
+    with Not_found ->
+      ID (s)
+   }
 | _ { raise (Error (Printf.sprintf "At offset %d: unexpected character.\n" 
                       (Lexing.lexeme_start lexbuf))) }
 

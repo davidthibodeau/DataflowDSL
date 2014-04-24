@@ -28,6 +28,8 @@ let printError = function
   | UndefinedVariable (c, i) -> 
     let _ = errctx := c in
     "Variable " ^ i ^ " appears freely."
+  | InvalidPatternDecl p ->
+      "Some pattern is invalid"
 
 exception Error of error
 
@@ -186,14 +188,13 @@ and typeStmt ctx = function
     let c' = typeCond ctx c in
     let sl' = typeStmts ctx sl in
     (If (c', sl'), ctx)
-  | For (m, i, sl) ->
-    (* TODO : Verify pattern is well formed *)
+  | For (m, i, None, sl) ->
     (match getCtxTp ctx i with
     | None -> raise (Error (UndefinedVariable (ctx, i)))
     | Some (Set d) -> 
       let ctx' = List.append (gatherPat' d m) ctx in
       let sl' = typeStmts ctx' sl in
-      (For (m, i, sl'), ctx))
+      (For (m, i, Some d, sl'), ctx))
   | Assign (i, e) as a ->
     let Typ (e1, d) as e' = typeExpr ctx e in
     match getCtxTp ctx i with

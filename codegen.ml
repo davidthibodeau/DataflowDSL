@@ -15,6 +15,11 @@ let nodeString = ref ""
 let direction : direction option ref = ref None
 let flowStmt = ref ""
 
+(* NameGenerator for temp variables *)
+let nextName = 
+  let c = ref 0 in
+  function () -> let _ = c := !c + 1 in "dsl_var" ^ (string_of_int !c)
+
 (* Boilerplate code *)
 let imports = 
 "import java.util.*;
@@ -98,12 +103,20 @@ let rec genDomain : domain -> string = function
   | Name id -> id
   | Matlab m -> M.printtp m
 
+let substInOut i = 
+      if i = "in" then 
+        "currentInSet"
+      else if i = "out" then
+        "currentOutSet"
+      else
+        i
+
 let rec genTExpr = function
   | NoTyp e -> raise UntypedExpression
   | Typ (e, t) -> genFlowExpr e
 
 and genFlowExpr e = match e with
-  | Var id -> id
+  | Var id -> substInOut id
   | Plus (o1, o2) -> 
     let s1 = genTExpr o1 in
     let s2 = genTExpr o2 in
@@ -125,13 +138,7 @@ let rec expandInOut = function
   | Plus  (x, y) -> Plus  (expandInOut x, expandInOut y)
   | Minus (x, y) -> Minus (expandInOut x, expandInOut y)
   | Times (x, y) -> Times (expandInOut x, expandInOut y)
-  | Var i -> 
-      if i = "in" then 
-        Var "currentInSet"
-      else if i = "out" then
-        Var "currentOutSet"
-      else
-        Var i
+  | Var i -> Var (substInOut i)
 
 let rec methodStmt access e tp = 
   let acc tp = "((" ^ (genDomain tp) ^ ") " ^ access ^ ")" in
@@ -315,19 +322,40 @@ and methodBody access e =
 let genCond = function
   | True -> "true"
   | False -> "false"
-  | Eq (e1, e2) -> "" (* Find eq comparison for sets and etc. *)
+  | Eq (e1, e2) -> "(" ^ (genTExpr e1) ^ ").equals(" ^ (genTExpr e2) ^ ")"
 
-let rec genStmt lvl = function
+let genInsts l = List.fold_right (fun x y -> x ^ " && " ^ y) l "true"
+
+let rec genPat b lvl (decls, ifs, stmts) = 
+  let s = match b with true -> "if (" | false -> "else if (" in
+  let _ = writeline lvl (s ^ (genInsts ifs) ^ ") {") in 
+  let _ = List.iter (writeline (lvl + 1)) decls in
+  let _ = List.iter (genStmt (lvl + 1)) stmts in
+  writeclosings lvl lvl
+
+and genStmt lvl = function
   | If (c, sl) -> 
       let _ = writeline lvl ("if (" ^ (genCond c) ^ ") {") in
       let _ = List.iter (genStmt (lvl + 1)) sl in
       writeclosings lvl lvl
-  | For (m, i, sl) ->
-      let _ = writeline lvl ("for (  ) {") in
-      let _ = List.iter (genStmt (lvl + 1)) sl in
+  | For (m, i, Some d, sl) ->
+      let temp, node = match m with
+      | M.Var i -> i, None
+      | M.Node m -> nextName (), Some m
+      | M.NodeAs (i, m) -> i, Some m
+      in
+      let f = "for (" ^ (genDomain d) ^ " " ^ temp ^ " : " ^ (substInOut i) ^ ") {" in
+      let _ = writeline lvl f in
+      let _ = match node with
+      | None -> List.iter (genStmt (lvl + 1)) sl
+      | Some m -> 
+          let (decls, insts) = methodBody temp m in
+          genPat true (lvl + 1) (decls, insts, sl)
+      in
       writeclosings lvl lvl
   | Assign (i, e) -> 
-      writeline lvl (i ^ " = " ^ (genTExpr e) ^ ";")
+      writeline lvl ((substInOut i) ^ " = " ^ (genTExpr e) ^ ";")
+  | _ -> assert false
 
 let rec genFExpr = function
   | Var id -> 
@@ -348,27 +376,17 @@ let rec genFExpr = function
     let dv2, s2 = genFExpr o2 in
      List.append dv1 dv2, "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
 
-let genInsts l = List.fold_right (fun x y -> x ^ " && " ^ y) l "true"
-
-
-let genPat b (ifs, decls, stmts) = 
-  let s = match b with true -> "if (" | false -> "else if (" in
-  let _ = writeline 2 (s ^ (genInsts ifs) ^ ") {") in 
-  let _ = List.iter (writeline 3) decls in
-  let _ = List.iter (genStmt 3) stmts in
-  writeclosings 2 2
-  
 let genBranch nodeName initend dvars (a, ll) =
   let (init, cp, ending) = initend in
   let _ = writecase nodeName (M.printtp a) in
   let _ = writeline 2 init in
   let f = fun x -> writeline 2 (!stringDomain ^ " " ^ x ^ " = Sets.newHashSet();") in
   let _ = List.iter f dvars in
-  let f' = fun (vl, sl) -> let (decls, ifs) = methodBody nodeName (a, vl) in (ifs, decls, sl) in
+  let f' = fun (vl, sl) -> let (decls, ifs) = methodBody nodeName (a, vl) in (decls, ifs, sl) in
   let _ = match List.map f' ll with 
   | [] -> assert false
-  | [ll'] -> genPat true ll'
-  | ll' :: lls -> let _ = genPat true ll' in List.iter (genPat false) lls
+  | [ll'] -> genPat true 2 ll'
+  | ll' :: lls -> let _ = genPat true 2 ll' in List.iter (genPat false 2) lls
   in   
   let _ = writeline 2 cp in
   let _ = writeline 2 ending in
