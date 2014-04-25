@@ -52,6 +52,7 @@ let defaultInitial () =
   ) ^ ";
 \t}\n")
 
+(* Method copy is standard. We just need to give it the right type *)
 let copy () =
 "\t@Override public " ^ !stringDomain ^ " copy(" ^ !stringDomain ^ " src) {
 \t\treturn " ^ 
@@ -62,11 +63,13 @@ let copy () =
 \t}\n"
 
 
+(* Standard constructor *)
 let constructor () =
 "\tpublic " ^ !analysisName ^ "(ASTNode tree) {
 \t\tsuper(tree);
 \t}\n"
 
+(* Main function that actually does nothing but run the analysis and return *)
 let main () =
 "\tpublic static void main(String[] args) {
 \t\tProgram ast = parseOrDie(args[0]);
@@ -74,35 +77,39 @@ let main () =
 \t\tanalysis.analyze();
 \t}\n"
 
-(* \t\tprintWithAnalysisResults(ast, analysis); *)
 (* Generation *)
 
+(* Some formatting functions for printing *)
 let rec printlvl = function
   | 0 -> ""
   | n -> "\t" ^ (printlvl (n-1))
 
-(* n : current level. m : base level *)
+(* n : current level. m : base level + 1 *)
 let rec closeinnerlvl n m =
   if n < m then "" else
   (printlvl n) ^ "}\n" ^ (closeinnerlvl (n-1) m)
 
+(* Abstracted actual printing in the write functions *)
 let write s = output := (!output ^ s ^ "\n")
 let writeline lvl s = output := (!output ^ (printlvl lvl) ^ s ^ "\n")
 let writecase node case = output := 
   (!output ^ "\t@Override public void case" ^ case ^ "(" ^ case ^ " " ^ node ^ ") {\n")
-
 let writeclosings lvl lvl' = output := (!output ^ (closeinnerlvl lvl lvl'))
 
+(* Provides the domain of the analysis
+   Assumes it has been initialized *)
 let getTypeDomain () = match !typeDomain with
   | Some e -> e
   | None -> assert false
 
+(* Gives a string representation in java syntax of the domain *)
 let rec genDomain : domain -> string = function
   | Set d -> "Set<" ^ (genDomain d) ^ ">"
   | Tuple (d1, d2) -> "Map<" ^ (genDomain d1) ^ ", " ^ (genDomain d2) ^ ">"
   | Name id -> id
   | Matlab m -> M.printtp m
 
+(* Does the substitution for the special keywords in and out *)
 let substInOut i = 
       if i = "in" then 
         "currentInSet"
@@ -111,35 +118,38 @@ let substInOut i =
       else
         i
 
+(* Generates expressions *)
 let rec genTExpr = function
-  | NoTyp e -> raise UntypedExpression
-  | Typ (e, t) -> genFlowExpr e
-
-and genFlowExpr e = match e with
-  | Var id -> substInOut id
-  | Plus (o1, o2) -> 
+  | Typ (Var id, t) -> substInOut id
+  | Typ (Plus (o1, o2), t) -> 
     let s1 = genTExpr o1 in
     let s2 = genTExpr o2 in
      "Sets.union(" ^ s1 ^ ", " ^ s2 ^ ")" 
-  | Minus (o1, o2) -> 
+  | Typ (Minus (o1, o2), t) -> 
     let s1 = genTExpr o1 in
     let s2 = genTExpr o2 in
     "Sets.difference(" ^ s1 ^ ", " ^ s2 ^ ")" 
-  | Times (o1, o2) -> 
+  | Typ (Times (o1, o2), t) -> 
     let s1 = genTExpr o1 in
     let s2 = genTExpr o2 in
      "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
-  | EmptySet -> "Sets.newHashSet()"
-  | Set e -> 
+  | Typ (EmptySet, t) -> "Sets.<" ^ (genDomain t) ^ "> newHashSet()"
+  | Typ (Set e, Set t) -> 
     let s = genTExpr e in
-    "Sets.newHashSet(" ^ s ^ ")"
+     "Sets.<" ^ (genDomain t) ^ "> newHashSet(" ^ s ^ ")"
+  | _ -> raise UntypedExpression
 
+(* Goes through a flow expression and does the in/out substitution *)
 let rec expandInOut = function
   | Plus  (x, y) -> Plus  (expandInOut x, expandInOut y)
   | Minus (x, y) -> Minus (expandInOut x, expandInOut y)
   | Times (x, y) -> Times (expandInOut x, expandInOut y)
   | Var i -> Var (substInOut i)
 
+(* Collects the instanceof and the new variable declarations of the pattern
+   access : the string providing this astnode we want 
+   e : the node from the dsl ast 
+   tp : the type the string will have *)
 let rec methodStmt access e tp = 
   let acc tp = "((" ^ (genDomain tp) ^ ") " ^ access ^ ")" in
   match e with
@@ -154,6 +164,7 @@ let rec methodStmt access e tp =
       let insts' = (access ^ " instanceof " ^ (M.printtp t)) :: insts in
       decls', insts'
       
+(* Does the collection from them matlab ast point of view *)
 and methodBody access e = 
   let acc s = access ^ s in
   match e with
@@ -319,13 +330,21 @@ and methodBody access e =
       List.append decls1 decls2, List.append insts1 insts2
   | _, _ -> assert false 
 
+(* Condition in if statement. Uses .equals method for comparison *)
 let genCond = function
   | True -> "true"
   | False -> "false"
   | Eq (e1, e2) -> "(" ^ (genTExpr e1) ^ ").equals(" ^ (genTExpr e2) ^ ")"
 
+(* Creates a string of conditions for one pattern *)
 let genInsts l = List.fold_right (fun x y -> x ^ " && " ^ y) l "true"
 
+(* Generates an if (or else if) block for a pattern 
+   b : bool deciding whether an if block or an else if block 
+   lvl : tabbing level
+   decls : list of variable decls
+   ifs : list of conditions
+   stmts : list of stmts in block *)
 let rec genPat b lvl (decls, ifs, stmts) = 
   let s = match b with true -> "if (" | false -> "else if (" in
   let _ = writeline lvl (s ^ (genInsts ifs) ^ ") {") in 
@@ -333,6 +352,8 @@ let rec genPat b lvl (decls, ifs, stmts) =
   let _ = List.iter (genStmt (lvl + 1)) stmts in
   writeclosings lvl lvl
 
+(* Generates statements
+   lvl : tabbing level *)
 and genStmt lvl = function
   | If (c, sl) -> 
       let _ = writeline lvl ("if (" ^ (genCond c) ^ ") {") in
@@ -357,6 +378,7 @@ and genStmt lvl = function
       writeline lvl ((substInOut i) ^ " = " ^ (genTExpr e) ^ ";")
   | _ -> assert false
 
+(* Generates the flow expression common for each pattern *)
 let rec genFExpr = function
   | Var id -> 
       if id = "currentInSet" || id = "currentOutSet" then
@@ -376,6 +398,14 @@ let rec genFExpr = function
     let dv2, s2 = genFExpr o2 in
      List.append dv1 dv2, "Sets.intersection(" ^ s1 ^ ", " ^ s2 ^ ")" 
 
+(* A branch is the list of patterns starting with the same head in the flow splitting
+   This thus generates each method needed by a pattern.
+   nodeName : the name of the node which is split by the pattern matching
+   initend : a triple of strings which puts the currentInSet and currentOutSet in place
+   dvars : The variables that appear in the flow expression that need to be declared
+   a : the head of the patterns
+   ll : the list of pairs of pattern bodies and statement lists
+ *)
 let genBranch nodeName initend dvars (a, ll) =
   let (init, cp, ending) = initend in
   let _ = writecase nodeName (M.printtp a) in
@@ -394,6 +424,7 @@ let genBranch nodeName initend dvars (a, ll) =
   let _ = writeline 1 "\n" in
   ()
     
+(* Generates the flow function *)
 let genFlow = function
   | CheckedFlow (i, (i', fe), bs) ->
     let nodeName = i in
@@ -403,14 +434,14 @@ let genFlow = function
       | Some Forward ->
         if i' = "out" then
           ("inFlowSets.put(node, copy(currentInSet));",
-           "currentOutSet = " ^ cp,
+           "currentOutSet = " ^ cp ^ ";",
            "outFlowSets.put(node, copy(currentOutSet));")
         else
           assert false
       | Some Backward -> 
         if i' = "in" then
           ("outFlowSets.put(node, copy(currentOutSet));",
-           "currentInSet = " ^ cp,
+           "currentInSet = " ^ cp ^ ";",
            "inFlowSets.put(node, copy(currentInSet));")
         else
           assert false
@@ -418,13 +449,14 @@ let genFlow = function
     List.iter (genBranch nodeName initend dvars) bs
   | _ -> assert false                           
 
+(* Initialize the direction of the analysis *)
 let genDirection d = 
   let _ = direction := (Some d) in
   match d with
   | Forward -> "ForwardAnalysis"
   | Backward -> "BackwardAnalysis"
 
-
+(* Generates the merge function *)
 let genMerge (Merge (i1, i2, e)) =
   let s = ("@Override public " ^ !stringDomain ^ " merge(" ^ !stringDomain ^ " " 
            ^ i1 ^ ", " ^ !stringDomain ^ " " ^ i2 ^ ") {") 
@@ -434,12 +466,15 @@ let genMerge (Merge (i1, i2, e)) =
   let _ = writeline 2 ("return Sets.newHashSet(" ^ s ^ ");") in
   writeline 1 "}\n"
 
+(* A body contains an initial condition, a merge function, a flow function and
+   possibly some auxiliary functions. The last one has not been implemented yet *)
 let genBodies = function
   | Body (i, m, f, a) -> 
     let _ = genMerge m in
     let _ = genFlow f in ()
 
-(* Each analysis is in its own file which has the name of the analysis *)
+(* Each analysis is in its own file which has the name of the analysis (TODO) *)
+(* Generates the file for a given analysis *)
 let genAnalysis = function
   | Analysis (name, direction, domain, bodies) ->
     let _ = output := "" in
@@ -460,6 +495,7 @@ let genAnalysis = function
     let _ = write "}" in
     print_endline !output          
 
+(* entry point for code generation *)
 let codegen = function 
   | Program a -> 
     List.iter genAnalysis a
