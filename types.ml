@@ -129,7 +129,7 @@ let rec gatherPat : M.ast * M.vpat list -> (id * domain) list = function
   | M.ColonExpr, [] -> []
   | M.EndExpr, [] -> []
   | M.LValueExpr, [] -> []
-  | M.NameExpr, [m] -> gatherPat' (Matlab M.Expr) m
+  | M.NameExpr, [m] -> gatherPat' (Matlab M.Name) m
   | M.ParameterizedExpr, [m; M.Var i] -> (i, Set (Matlab M.Expr)) :: (gatherPat' (Matlab M.Expr) m)
   | M.CellIndexExpr, [m; M.Var i] -> (i, Set (Matlab M.Expr)) :: (gatherPat' (Matlab M.Expr) m)
   | M.DotExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Name) m2)
@@ -168,7 +168,7 @@ let rec gatherPat : M.ast * M.vpat list -> (id * domain) list = function
   | M.GEExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
   | M.EQExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
   | M.NEExpr, [m1; m2] -> List.append (gatherPat' (Matlab M.Expr) m1) (gatherPat' (Matlab M.Expr) m2)
-  | M.FunctionHandleExpr, [m] -> gatherPat' (Matlab M.Name) m
+  | M.FunctionHandleExpr, [M.Var i] -> [i, (Matlab M.Name)] 
   | M.LambdaExpr, [M.Var i; m] -> (i, Set (Matlab M.Name)) :: (gatherPat' (Matlab M.Expr) m)
   | _, _ as p -> raise (Error (InvalidPatternDecl p)) 
 

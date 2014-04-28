@@ -189,8 +189,6 @@ analysis:
         | ([I i], [M m], [F f], a) -> Body (i, m, f, a)
       (* I think we can omit initial condition since it is often the empty set anyway *)
         | ([], [M m], [F f], a) -> Body (NoInit, m, f, a) 
-      (* This one should be removed but is used to test merge *)
-        | ([], [M m], [], a) -> Body (NoInit, m, NoFlow, a)
         | _ -> raise MisformedBodies
       in
       Analysis (i, di, d, makeBodies)
