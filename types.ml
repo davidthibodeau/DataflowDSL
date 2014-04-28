@@ -31,6 +31,7 @@ let printError = function
   | InvalidPatternDecl p ->
       "Some pattern is invalid"
 
+exception TypingError
 exception Error of error
 
 (* each analysis will reset it for its own needs *)  
@@ -262,7 +263,7 @@ let typeProgram = function
       | Error e -> 
         let s = printError e in
         let _ = print_endline s in
-        Empty
+        raise TypingError
     end
   | Empty -> Empty
 

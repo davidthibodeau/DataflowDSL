@@ -1,5 +1,6 @@
 open Syntax
 open Matlab
+open Printf
 module T = Types
 module M = Ast
 
@@ -491,9 +492,10 @@ let genAnalysis = function
     let _ = write (defaultInitial ()) in
     let _ = write (copy ()) in
     let _ = genBodies bodies in
-    (* Ajouter le reste du body *)
     let _ = write "}" in
-    print_endline !output          
+    let oc = open_out (!analysisName ^ ".java") in
+    let _ = fprintf oc "%s\n" !output in
+    close_out oc
 
 (* entry point for code generation *)
 let codegen = function 

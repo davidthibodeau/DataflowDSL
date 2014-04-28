@@ -1,6 +1,6 @@
 open Lexing
 
-let run filename action ast = 
+let run filename ast = 
   let inBuffer = open_in filename in
   let lineBuffer = Lexing.from_channel inBuffer in
   let state = ref Lexer.BaseLevel in
@@ -10,15 +10,9 @@ let run filename action ast =
     | Lexer.CommentLevel _ -> Lexer.comment state lexbuf
     ) in
   try
-    let () = ast := Parser.program lexing lineBuffer in
-    match action with
-    | "parse" -> ()
-    | "type" -> let _ = Types.typeProgram !ast in ()
-    | "gen" -> 
-      let _ = ast := Types.typeProgram !ast in
-      Codegen.codegen !ast
-    | _ ->
-      let _ = print_endline "Invalid action" in ()
+    let _ = ast := Parser.program lexing lineBuffer in
+    let _ = ast := Types.typeProgram !ast in
+    Codegen.codegen !ast
   with
   | Lexer.Error msg ->
       Printf.eprintf "%s%!" msg
@@ -26,3 +20,4 @@ let run filename action ast =
     let pos = Lexing.lexeme_start_p (lineBuffer) in
     Printf.eprintf "At line %d and column %d: syntax error === %s.\n%!"
       pos.pos_lnum (pos.pos_cnum - pos.pos_bol) (Lexing.lexeme (lineBuffer))
+  | Types.TypingError -> ()
